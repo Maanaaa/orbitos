@@ -6,7 +6,7 @@ RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
-# ── 2. Image finale : nginx (vhost orbitos.mana) + serveur Node ──────
+# ── 2. Image finale : nginx + serveur Node ──────
 FROM node:22-alpine
 RUN apk add --no-cache nginx tini
 WORKDIR /app
@@ -28,7 +28,7 @@ ENV NODE_ENV=production \
     ORBIT_SSH_DIR=/ssh \
     PORT=4000 \
     HOST=127.0.0.1 \
-    ORBIT_HOSTS=orbitos.mana,localhost,127.0.0.1
+    ORBIT_HOSTS=localhost,127.0.0.1
 
 VOLUME /data
 EXPOSE 80

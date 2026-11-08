@@ -391,7 +391,7 @@ function Wizard({ integ, onClose, onCreated, onIntegrations }: { integ: any; onC
       const [info, br] = await Promise.all([api(`/api/github/repo?repo=${encodeURIComponent(full)}`), api(`/api/github/branches?repo=${encodeURIComponent(full)}`)]);
       setBranches(br);
       setBranch(info.defaultBranch);
-      const base = (f.domain && f.domain.split('.').slice(1).join('.')) || 'example.com';
+      const base = (f.domain && f.domain.split('.').slice(1).join('.')) || useOS.getState().settings?.defaultDomain || 'example.com';
       set('domain', `${full.split('/')[1].toLowerCase().replace(/[^a-z0-9-]/g, '-')}.${base}`);
     } catch (e: any) {
       toast('Dépôt inaccessible', 'error', e.message);
@@ -636,7 +636,7 @@ function Wizard({ integ, onClose, onCreated, onIntegrations }: { integ: any; onC
 
 // ───────────────────────── Intégrations ─────────────────────────
 
-function Integrations({ onClose }: { onClose: () => void }) {
+export function Integrations({ onClose }: { onClose: () => void }) {
   const servers = useOS((s) => s.servers);
   const integ = useApi(() => api('/api/integrations'), []);
   const [token, setToken] = useState('');

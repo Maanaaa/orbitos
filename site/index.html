@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OrbitOS — tes serveurs, comme un OS</title>
+  <meta name="description" content="OrbitOS est un superviseur de serveurs qui ressemble à un système d'exploitation : fenêtres, dock, Spotlight, widgets. Dans ton navigateur, par-dessus SSH, sans agent. Open source, MIT.">
+  <meta name="theme-color" content="#05070f" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="OrbitOS — tes serveurs, comme un OS">
+  <meta property="og:description" content="Un superviseur de serveurs façon système d'exploitation, dans le navigateur, par-dessus SSH. Rien à installer sur tes machines. Open source, MIT.">
+  <meta property="og:url" content="https://maanaaa.github.io/orbitos/">
+  <meta property="og:image" content="https://maanaaa.github.io/orbitos/assets/og.svg">
+  <meta property="og:locale" content="fr_FR">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script>document.documentElement.classList.add('js')</script>
+  <script src="main.js" defer></script>
+</head>
+<body>
+
+<!-- Sprite d'icônes (traits 24×24) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-finder" viewBox="0 0 24 24"><path d="M3 7.5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 10h18"/></symbol>
+  <symbol id="i-editor" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M5 7l5 5-5 5"/><path d="M12 18h7"/></symbol>
+  <symbol id="i-docker" viewBox="0 0 24 24"><path d="M3 12.5h17.5c.5-1.5 1.5-2 2-2-.6-1-1.6-1.3-2.4-1.1C20 13.5 16.5 19 10 19c-4 0-6.6-2.6-7-6.5z"/><path d="M6 9.5h3v3H6zM9 9.5h3v3H9zM12 9.5h3v3h-3zM9 6.5h3v3H9z"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3z"/></symbol>
+  <symbol id="i-game" viewBox="0 0 24 24"><path d="M7 8h10a5 5 0 0 1 5 5v1a3 3 0 0 1-5.4 1.8L15 14H9l-1.6 1.8A3 3 0 0 1 2 14v-1a5 5 0 0 1 5-5z"/><path d="M7.5 10.5v3M6 12h3"/><path d="M15.5 11.5h.01M17.5 13h.01"/></symbol>
+  <symbol id="i-backup" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5"/><path d="M3.5 3.5v5h5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></symbol>
+  <symbol id="i-console" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9h10M7 12.5h6M7 16h8"/></symbol>
+  <symbol id="i-doctor" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.4-7.5-10A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 7.5 3c0 5.6-7.5 10-7.5 10z"/><path d="M7.5 12.5h2.5l1-2 2 4 1-2h2.5"/></symbol>
+  <symbol id="i-services" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.8-3.2 8-7.5 9.5-4.3-1.5-7.5-4.7-7.5-9.5V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></symbol>
+  <symbol id="i-servers" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="7" rx="2"/><rect x="3.5" y="13" width="17" height="7" rx="2"/><path d="M7.5 7.5h.01M7.5 16.5h.01M11 7.5h5M11 16.5h5"/></symbol>
+  <symbol id="i-journal" viewBox="0 0 24 24"><path d="M5 4.5h10a4 4 0 0 1 4 4V20H9a4 4 0 0 1-4-4z"/><path d="M9 9h6M9 12.5h6M9 16h3"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.3-4.3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16 7l2.5 2.5M14 9l2 2"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-cookie" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 3 3 0 0 1-3.5-3A3 3 0 0 1 14 5.5 3 3 0 0 1 12 3z"/><path d="M8.5 10.5h.01M9.5 15.5h.01M14.5 14.5h.01"/></symbol>
+  <symbol id="i-host" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M17 16l2 2 3-3.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M12 7v5l3.5 2"/><circle cx="12" cy="12" r="8.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5.5 15V6a2 2 0 0 1 2-2H15"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 4.5V8M9 13h.01M15 13h.01M2 13v2M22 13v2"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6.5 8h11v3a5.5 5.5 0 0 1-11 0z"/><path d="M12 16.5V21"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-github" viewBox="0 0 16 16"><path fill="currentColor" stroke="none" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-logo" viewBox="0 0 64 64"><ellipse cx="32" cy="32" rx="25" ry="11" transform="rotate(-25 32 32)" fill="none" stroke="url(#logo-g)" stroke-width="5"/><circle cx="32" cy="32" r="9" fill="url(#logo-g)" stroke="none"/><circle cx="51.5" cy="18.8" r="5" fill="#5ac8fa" stroke="none"/></symbol>
+  <defs><linearGradient id="logo-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ac8fa"/><stop offset="1" stop-color="#7d5cff"/></linearGradient></defs>
+</svg>
+
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="nav" data-nav>
+  <div class="wrap nav-inner">
+    <a class="brand" href="#" aria-label="OrbitOS, retour en haut">
+      <svg class="brand-mark" aria-hidden="true"><use href="#i-logo"/></svg>
+      <span>OrbitOS</span>
+    </a>
+    <nav aria-label="Sections">
+      <ul class="nav-links">
+        <li><a href="#apps">Apps</a></li>
+        <li><a href="#hebergement">Hébergement</a></li>
+        <li><a href="#securite">Sécurité</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-ghost btn-sm" href="https://github.com/Maanaaa/orbitos">
+      <svg class="i" aria-hidden="true"><use href="#i-github"/></svg><span>GitHub</span>
+    </a>
+  </div>
+</header>
+
+<main id="contenu">
+
+  <!-- HERO -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero-grid">
+      <div class="hero-copy reveal">
+        <p class="pill"><span class="pill-dot" aria-hidden="true"></span>v0.2 · Open source · MIT</p>
+        <h1 id="hero-title">Tes serveurs,<br><span class="grad">comme un OS.</span></h1>
+        <p class="lead">OrbitOS est un superviseur de serveurs qui ressemble à un système d'exploitation&nbsp;: fenêtres, dock, Spotlight, widgets. Dans ton navigateur, par-dessus SSH. Rien à installer sur tes machines.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/Maanaaa/orbitos">
+            <svg class="i" aria-hidden="true"><use href="#i-github"/></svg><span>Voir sur GitHub</span>
+          </a>
+          <a class="btn btn-ghost" href="#demarrer"><span>Démarrer</span><svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </div>
+        <ul class="hero-meta" aria-label="En bref">
+          <li>Un seul conteneur Docker</li>
+          <li>Sans agent</li>
+          <li>Interface en français</li>
+        </ul>
+        <img class="stars-badge" src="https://img.shields.io/github/stars/Maanaaa/orbitos?style=flat&amp;logo=github&amp;label=Stars&amp;color=7d5cff" alt="Étoiles GitHub du dépôt OrbitOS" height="20" loading="lazy">
+      </div>
+
+      <div class="orbit reveal" data-orbit data-anim style="--d:1">
+        <svg viewBox="16 78 608 340" role="img" aria-labelledby="orbit-t orbit-d">
+          <title id="orbit-t">OrbitOS au centre de tes serveurs</title>
+          <desc id="orbit-d">Le cœur OrbitOS au centre, cinq serveurs en orbite sur des anneaux elliptiques, reliés par SSH ; des paquets de données circulent entre le cœur et chaque serveur.</desc>
+          <defs>
+            <radialGradient id="o-glow">
+              <stop offset="0" stop-color="#7d5cff" stop-opacity=".55"/>
+              <stop offset=".45" stop-color="#5ac8fa" stop-opacity=".14"/>
+              <stop offset="1" stop-color="#5ac8fa" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="o-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#5ac8fa"/><stop offset="1" stop-color="#7d5cff"/>
+            </linearGradient>
+            <linearGradient id="o-ring" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#5ac8fa" stop-opacity=".6"/>
+              <stop offset=".5" stop-color="#7d5cff" stop-opacity=".12"/>
+              <stop offset="1" stop-color="#7d5cff" stop-opacity=".6"/>
+            </linearGradient>
+          </defs>
+          <g id="l-back" class="stars"></g>
+          <g id="l-rings" fill="none">
+            <ellipse class="ring" cx="320" cy="240" rx="132" ry="60" transform="rotate(-10 320 240)"/>
+            <ellipse class="ring" cx="320" cy="240" rx="198" ry="90" transform="rotate(-10 320 240)"/>
+            <ellipse class="ring ring-dash" cx="320" cy="240" rx="262" ry="120" transform="rotate(-10 320 240)"/>
+          </g>
+          <g id="l-world">
+            <g id="l-links">
+              <line class="link" data-link="0" x1="320" y1="240" x2="505.7" y2="242.8"/>
+              <line class="link" data-link="1" x1="320" y1="240" x2="214" y2="290.1"/>
+              <line class="link" data-link="2" x1="320" y1="240" x2="154.6" y2="169.5"/>
+              <line class="link" data-link="3" x1="320" y1="240" x2="146.3" y2="222.2"/>
+              <line class="link" data-link="4" x1="320" y1="240" x2="476.9" y2="314.9"/>
+            </g>
+            <g id="l-packets">
+              <circle class="packet" data-packet="0" r="3" cx="-20" cy="-20"/><circle class="packet alt" data-packet="0" r="2.4" cx="-20" cy="-20"/>
+              <circle class="packet" data-packet="1" r="3" cx="-20" cy="-20"/><circle class="packet alt" data-packet="1" r="2.4" cx="-20" cy="-20"/>
+              <circle class="packet" data-packet="2" r="3" cx="-20" cy="-20"/><circle class="packet alt" data-packet="2" r="2.4" cx="-20" cy="-20"/>
+              <circle class="packet" data-packet="3" r="3" cx="-20" cy="-20"/><circle class="packet alt" data-packet="3" r="2.4" cx="-20" cy="-20"/>
+              <circle class="packet" data-packet="4" r="3" cx="-20" cy="-20"/><circle class="packet alt" data-packet="4" r="2.4" cx="-20" cy="-20"/>
+            </g>
+            <g id="l-behind"></g>
+            <g class="core">
+              <circle cx="320" cy="240" r="120" fill="url(#o-glow)"/>
+              <circle class="pulse" cx="320" cy="240" r="42"/>
+              <circle class="pulse p2" cx="320" cy="240" r="42"/>
+              <circle cx="320" cy="240" r="40" fill="url(#o-grad)"/>
+              <circle cx="320" cy="240" r="40" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1"/>
+              <ellipse cx="320" cy="240" rx="23" ry="9" transform="rotate(-25 320 240)" fill="none" stroke="#fff" stroke-width="3" opacity=".95"/>
+              <circle cx="320" cy="240" r="7" fill="#fff"/>
+              <circle cx="338.2" cy="227.6" r="3.6" fill="#fff"/>
+              <text class="core-label" x="320" y="302">OrbitOS</text>
+            </g>
+            <g id="l-front">
+              <g class="node" data-ring="1" data-phase="0.4" data-speed="0.16" transform="translate(505.7 242.8) scale(1.015)" style="opacity:.88">
+                <rect class="node-card" x="-38" y="-17" width="76" height="34" rx="10"/>
+                <circle class="led" cx="-25" cy="-4.5" r="2.6"/>
+                <rect class="bar" x="-18" y="-7" width="42" height="4.5" rx="2.2"/>
+                <rect class="bar dim" x="-18" y="2" width="26" height="4.5" rx="2.2"/>
+                <circle class="led ok" cx="-25" cy="4.5" r="2.6"/>
+                <text class="node-label" y="33">prod</text>
+              </g>
+              <g class="node" data-ring="0" data-phase="2.6" data-speed="0.24" transform="translate(214 290.1) scale(1.032)" style="opacity:.9">
+                <rect class="node-card" x="-38" y="-17" width="76" height="34" rx="10"/>
+                <circle class="led" cx="-25" cy="-4.5" r="2.6"/>
+                <rect class="bar" x="-18" y="-7" width="38" height="4.5" rx="2.2"/>
+                <rect class="bar dim" x="-18" y="2" width="30" height="4.5" rx="2.2"/>
+                <circle class="led ok" cx="-25" cy="4.5" r="2.6"/>
+                <text class="node-label" y="33">staging</text>
+              </g>
+              <g class="node" data-ring="2" data-phase="4.1" data-speed="0.1" transform="translate(154.6 169.5) scale(.845)" style="opacity:.64">
+                <rect class="node-card" x="-38" y="-17" width="76" height="34" rx="10"/>
+                <circle class="led" cx="-25" cy="-4.5" r="2.6"/>
+                <rect class="bar" x="-18" y="-7" width="44" height="4.5" rx="2.2"/>
+                <rect class="bar dim" x="-18" y="2" width="20" height="4.5" rx="2.2"/>
+                <circle class="led ok" cx="-25" cy="4.5" r="2.6"/>
+                <text class="node-label" y="33">homelab</text>
+              </g>
+              <g class="node" data-ring="1" data-phase="3.7" data-speed="0.16" transform="translate(146.3 222.2) scale(.886)" style="opacity:.69">
+                <rect class="node-card" x="-38" y="-17" width="76" height="34" rx="10"/>
+                <circle class="led" cx="-25" cy="-4.5" r="2.6"/>
+                <rect class="bar" x="-18" y="-7" width="34" height="4.5" rx="2.2"/>
+                <rect class="bar dim" x="-18" y="2" width="38" height="4.5" rx="2.2"/>
+                <circle class="led ok" cx="-25" cy="4.5" r="2.6"/>
+                <text class="node-label" y="33">raspberry</text>
+              </g>
+              <g class="node" data-ring="2" data-phase="1.0" data-speed="0.1" transform="translate(476.9 314.9) scale(1.078)" style="opacity:.97">
+                <rect class="node-card" x="-38" y="-17" width="76" height="34" rx="10"/>
+                <circle class="led" cx="-25" cy="-4.5" r="2.6"/>
+                <rect class="bar" x="-18" y="-7" width="40" height="4.5" rx="2.2"/>
+                <rect class="bar dim" x="-18" y="2" width="24" height="4.5" rx="2.2"/>
+                <circle class="led ok" cx="-25" cy="4.5" r="2.6"/>
+                <text class="node-label" y="33">vps-paris</text>
+              </g>
+            </g>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Faux bureau OrbitOS -->
+    <div class="wrap">
+      <div class="desk-frame reveal" style="--d:2">
+        <div class="desk console-open" data-desk data-anim role="img" aria-label="Aperçu de l'interface OrbitOS : une barre de menus, un terminal SSH ouvert sur le serveur prod, la recherche Spotlight qui trouve « Logs de minecraft », la console qui affiche les logs du serveur Minecraft en direct, et un dock d'applications.">
+          <div class="menubar">
+            <svg class="mb-logo"><use href="#i-logo"/></svg>
+            <b>OrbitOS</b>
+            <span>Fichier</span><span>Fenêtre</span><span class="hide-sm">Aide</span>
+            <span class="mb-right"><span class="mb-ok"></span><span class="hide-sm">5 serveurs</span><span>14:02</span></span>
+          </div>
+
+          <div class="win win-term">
+            <div class="win-bar"><i></i><i></i><i></i><span class="win-title">Terminal — prod</span></div>
+            <div class="term" data-term><div><span class="pr">admin@prod:~$ </span>docker ps --format '{{.Names}}'</div><div class="out">minecraft</div><div class="out">teamspeak</div><div class="out">nginx</div><div class="out">backrest</div><div><span class="pr">admin@prod:~$ </span>uptime</div><div class="out"> 14:02:11 up 41 days, load average: 0.21, 0.18, 0.15</div></div>
+          </div>
+
+          <div class="win win-console">
+            <div class="win-bar"><i></i><i></i><i></i><span class="win-title">Console — minecraft</span><span class="live">en direct</span></div>
+            <div class="term" data-console><div><span class="ts">14:02:31</span> <span class="lv">INFO</span> Starting minecraft server version 1.21.4</div><div><span class="ts">14:02:33</span> <span class="lv">INFO</span> Preparing level "world"</div><div><span class="ts">14:02:36</span> <span class="lv">INFO</span> Done (3.1s)! For help, type "help"</div><div><span class="ts">14:02:41</span> <span class="lv">INFO</span> Steve joined the game</div><div><span class="ts">14:02:44</span> <span class="lv">INFO</span> Alex joined the game</div><div><span class="ts">14:02:58</span> <span class="lv">INFO</span> &lt;Steve&gt; salut !</div></div>
+          </div>
+
+          <div class="widget">
+            <div class="w-head"><span>CPU · prod</span><b>23&nbsp;%</b></div>
+            <div class="w-bars"><i style="--h:.4;--k:0"></i><i style="--h:.7;--k:1"></i><i style="--h:.3;--k:2"></i><i style="--h:.55;--k:3"></i><i style="--h:.8;--k:4"></i><i style="--h:.35;--k:5"></i><i style="--h:.6;--k:6"></i><i style="--h:.45;--k:7"></i></div>
+            <div class="w-row"><span>RAM</span><span class="w-meter"><i style="width:62%"></i></span></div>
+            <div class="w-row"><span>Disque</span><span class="w-meter"><i style="width:38%"></i></span></div>
+          </div>
+
+          <div class="spot" data-spot>
+            <div class="spot-field">
+              <svg class="i"><use href="#i-search"/></svg>
+              <span class="spot-q" data-spot-q>Logs de minecraft</span><span class="caret"></span>
+              <kbd>⌘K</kbd>
+            </div>
+            <ul class="spot-res">
+              <li class="active"><span class="ico ico-xs" style="--a:#64748b;--b:#334155"><svg><use href="#i-console"/></svg></span><span>Logs de <b>minecraft</b></span><em>Console</em></li>
+              <li><span class="ico ico-xs" style="--a:#38bdf8;--b:#1d6fe0"><svg><use href="#i-docker"/></svg></span><span>Conteneur <b>minecraft</b></span><em>Docker</em></li>
+              <li><span class="ico ico-xs" style="--a:#f472b6;--b:#a855f7"><svg><use href="#i-game"/></svg></span><span><b>Minecraft</b> Java · 25565</span><em>Hébergement</em></li>
+            </ul>
+          </div>
+
+          <div class="dock">
+            <span class="ico" style="--a:#5ac8fa;--b:#2f7cf6"><svg><use href="#i-finder"/></svg></span>
+            <span class="ico on" style="--a:#3a4060;--b:#141827"><svg><use href="#i-terminal"/></svg></span>
+            <span class="ico" style="--a:#38bdf8;--b:#1d6fe0"><svg><use href="#i-docker"/></svg></span>
+            <span class="ico" style="--a:#34d399;--b:#0e9f8e"><svg><use href="#i-globe"/></svg></span>
+            <span class="ico" style="--a:#f472b6;--b:#a855f7"><svg><use href="#i-game"/></svg></span>
+            <span class="ico hide-xs" style="--a:#fbbf24;--b:#f97316"><svg><use href="#i-backup"/></svg></span>
+            <span class="ico hide-xs" style="--a:#4ade80;--b:#16a34a"><svg><use href="#i-monitor"/></svg></span>
+            <span class="ico on" data-dock-console style="--a:#64748b;--b:#334155"><svg><use href="#i-console"/></svg></span>
+            <span class="ico hide-sm" style="--a:#60a5fa;--b:#6366f1"><svg><use href="#i-shield"/></svg></span>
+            <span class="ico hide-sm" style="--a:#9ca3af;--b:#4b5563"><svg><use href="#i-settings"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SANS AGENT -->
+  <section class="section" id="sans-agent" aria-labelledby="agent-title">
+    <div class="wrap split">
+      <div class="reveal">
+        <p class="eyebrow">Sans agent</p>
+        <h2 id="agent-title">Juste SSH. Rien d'autre.</h2>
+        <p class="lead">OrbitOS tourne dans un conteneur, chez toi ou sur un serveur. Il parle à tes machines avec le SSH que tu utilises déjà&nbsp;: pas de démon, pas de port à ouvrir, pas de paquet à déployer.</p>
+        <ul class="checks">
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Tes hôtes de <code>~/.ssh/config</code> apparaissent tout seuls, ou ajoute-les dans l'interface.</span></li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Clés montées en lecture seule, vérification stricte des host keys.</span></li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Rien à désinstaller&nbsp;: OrbitOS ne laisse sur tes serveurs que ce que tu lui demandes de créer.</span></li>
+        </ul>
+      </div>
+      <div class="flow glass reveal" style="--d:1" data-anim role="img" aria-label="Schéma : ton navigateur se connecte au conteneur OrbitOS, qui joint tes serveurs en SSH.">
+        <div class="flow-node"><span class="ico" style="--a:#5ac8fa;--b:#2f7cf6"><svg><use href="#i-globe"/></svg></span><b>Navigateur</b><small>HTTPS · cookie signé</small></div>
+        <div class="flow-pipe"><i></i></div>
+        <div class="flow-node core-node"><svg class="flow-logo"><use href="#i-logo"/></svg><b>OrbitOS</b><small>nginx · Node · React</small></div>
+        <div class="flow-pipe"><i></i><span>SSH</span></div>
+        <div class="flow-node"><span class="ico" style="--a:#22d3ee;--b:#0891b2"><svg><use href="#i-servers"/></svg></span><b>Tes serveurs</b><small>n'importe quel Linux</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- APPS -->
+  <section class="section" id="apps" aria-labelledby="apps-title">
+    <div class="wrap">
+      <div class="head reveal">
+        <p class="eyebrow">Les apps</p>
+        <h2 id="apps-title">Chaque outil est une fenêtre.</h2>
+        <p class="lead">Ouvre-les depuis le dock ou avec <kbd>⌘K</kbd>. Garde seulement celles qui te servent.</p>
+      </div>
+      <ul class="apps">
+        <li class="app reveal"><span class="ico" style="--a:#5ac8fa;--b:#2f7cf6"><svg><use href="#i-finder"/></svg></span><div><h3>Finder</h3><p>Fichiers en SFTP&nbsp;: hôte, volumes Docker, conteneurs. Glisser-déposer, dossiers en .tar.gz, corbeille serveur.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#a78bfa;--b:#7d5cff"><svg><use href="#i-editor"/></svg></span><div><h3>Éditeur</h3><p>CodeMirror. Sous /etc/nginx&nbsp;: <code>nginx -t</code>, reload, rollback automatique si le test échoue.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#3a4060;--b:#141827"><svg><use href="#i-terminal"/></svg></span><div><h3>Terminal</h3><p>Onglets, shell SSH sur n'importe quel serveur, ou directement dans un conteneur.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#38bdf8;--b:#1d6fe0"><svg><use href="#i-docker"/></svg></span><div><h3>Docker</h3><p>Conteneurs groupés par stack, logs, shell, variables aux secrets masqués. Portainer ou compose.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#34d399;--b:#0e9f8e"><svg><use href="#i-globe"/></svg></span><div><h3>Domaines</h3><p>Vhosts nginx, santé des upstreams, SSL Let's Encrypt, SSO Authentik, assistant avec aperçu live.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#f472b6;--b:#a855f7"><svg><use href="#i-game"/></svg></span><div><h3>Hébergement</h3><p>Serveurs de jeu, vocaux, bots Discord et sites web, en un clic.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#fbbf24;--b:#f97316"><svg><use href="#i-backup"/></svg></span><div><h3>Sauvegarde</h3><p>Backrest et restic&nbsp;: plans, snapshots, restauration dans un dossier neuf.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#4ade80;--b:#16a34a"><svg><use href="#i-monitor"/></svg></span><div><h3>Moniteur</h3><p>CPU par cœur, RAM, réseau, disques, processus, stats Docker.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#64748b;--b:#334155"><svg><use href="#i-console"/></svg></span><div><h3>Console</h3><p>Logs en direct&nbsp;: conteneurs, systemd, journal, nginx.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#fb7185;--b:#e11d48"><svg><use href="#i-doctor"/></svg></span><div><h3>Doctor</h3><p>Conteneurs fantômes, upstreams morts, ports qui contournent UFW, certificats. Un score de santé.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#94a3b8;--b:#475569"><svg><use href="#i-services"/></svg></span><div><h3>Services</h3><p>systemd, timers, et tes crons traduits en langage clair.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#60a5fa;--b:#6366f1"><svg><use href="#i-shield"/></svg></span><div><h3>Bouclier</h3><p>Exposition réelle sur Internet, UFW, CrowdSec, fail2ban, config SSH, mises à jour en attente.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#22d3ee;--b:#0891b2"><svg><use href="#i-servers"/></svg></span><div><h3>Serveurs</h3><p>Importés depuis <code>~/.ssh/config</code> ou ajoutés dans l'interface.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#fcd34d;--b:#d97706"><svg><use href="#i-journal"/></svg></span><div><h3>Journal</h3><p>Chaque action tracée. Export Markdown.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#9ca3af;--b:#4b5563"><svg><use href="#i-settings"/></svg></span><div><h3>Réglages</h3><p>Modules, intégrations, mot de passe, onboarding au premier lancement.</p></div></li>
+        <li class="app reveal"><span class="ico" style="--a:#5ac8fa;--b:#7d5cff"><svg><use href="#i-search"/></svg></span><div><h3>Spotlight</h3><p><kbd>⌘K</kbd> ouvre une app, un conteneur, un domaine ou des logs en trois lettres.</p></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- HÉBERGEMENT -->
+  <section class="section" id="hebergement" aria-labelledby="host-title">
+    <div class="wrap">
+      <div class="head reveal">
+        <p class="eyebrow">Hébergement</p>
+        <h2 id="host-title">Un serveur de jeu en un clic.</h2>
+        <p class="lead">Choisis dans le catalogue, OrbitOS s'occupe du reste&nbsp;: ports alloués automatiquement, règles ufw, volumes persistants, console en direct avec commandes (RCON ou stdin), sauvegardes et restauration.</p>
+      </div>
+    </div>
+
+    <div class="marquee reveal" data-anim aria-label="Catalogue d'hébergement">
+      <ul class="marquee-track">
+        <li class="game" style="--a:#4ade80;--b:#15803d;--k:0"><span class="g-mono">MC</span><b>Minecraft Java</b><small>25565</small></li>
+        <li class="game" style="--a:#86efac;--b:#0f766e;--k:1"><span class="g-mono">BE</span><b>Minecraft Bedrock</b><small>19132/udp</small></li>
+        <li class="game" style="--a:#60a5fa;--b:#1e40af;--k:2"><span class="g-mono">TS</span><b>TeamSpeak 3</b><small>9987/udp</small></li>
+        <li class="game" style="--a:#818cf8;--b:#3730a3;--k:3"><span class="g-mono">T6</span><b>TeamSpeak 6</b><small>9987/udp</small></li>
+        <li class="game" style="--a:#93c5fd;--b:#1d4ed8;--k:4"><span class="g-mono">GM</span><b>Garry's Mod</b><small>27015</small></li>
+        <li class="game" style="--a:#fb923c;--b:#c2410c;--k:5"><span class="g-mono">BM</span><b>BeamMP</b><small>BeamNG · 30814</small></li>
+        <li class="game" style="--a:#fcd34d;--b:#b45309;--k:6"><span class="g-mono">VH</span><b>Valheim</b><small>2456/udp</small></li>
+        <li class="game" style="--a:#67e8f9;--b:#0e7490;--k:7"><span class="g-mono">PW</span><b>Palworld</b><small>8211/udp</small></li>
+        <li class="game" style="--a:#fdba74;--b:#9a3412;--k:8"><span class="g-mono">FA</span><b>Factorio</b><small>34197/udp</small></li>
+        <li class="game" style="--a:#fbbf24;--b:#c2410c;--k:9"><span class="g-mono">SF</span><b>Satisfactory</b><small>7777</small></li>
+        <li class="game" style="--a:#a5b4fc;--b:#5b21b6;--k:10"><span class="g-mono"><svg><use href="#i-bot"/></svg></span><b>Bot Discord</b><small>GitHub · Node, Bun, Python</small></li>
+        <li class="game" style="--a:#7dd3fc;--b:#1d4ed8;--k:11"><span class="g-mono"><svg><use href="#i-box"/></svg></span><b>Image Docker</b><small>n'importe laquelle</small></li>
+      </ul>
+    </div>
+
+    <div class="wrap">
+      <div class="deploy glass reveal" data-anim>
+        <div class="deploy-copy">
+          <h3>Sites web, depuis GitHub.</h3>
+          <p>Vite, Astro, export Next… ou un Dockerfile. Le build tourne dans un conteneur jetable, puis OrbitOS crée le vhost et le certificat. Déploiement en un clic, historique, rollback.</p>
+        </div>
+        <ol class="pipeline" aria-label="Étapes du déploiement">
+          <li style="--k:0"><span class="dot" aria-hidden="true"></span><b>Repo</b><small>github.com/toi/site</small></li>
+          <li style="--k:1"><span class="dot" aria-hidden="true"></span><b>Build</b><small>conteneur jetable</small></li>
+          <li style="--k:2"><span class="dot" aria-hidden="true"></span><b>Vhost + SSL</b><small>nginx · Let's Encrypt</small></li>
+          <li style="--k:3"><span class="dot" aria-hidden="true"></span><b>En ligne</b><small>rollback en un clic</small></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- SAUVEGARDE -->
+  <section class="section" id="sauvegarde" aria-labelledby="backup-title">
+    <div class="wrap split">
+      <div class="reveal">
+        <p class="eyebrow">Sauvegarde</p>
+        <h2 id="backup-title">restic, sans la ligne de commande.</h2>
+        <p class="lead">OrbitOS pilote Backrest&nbsp;: plans, snapshots, lancement immédiat, restauration dans un dossier neuf pour ne jamais écraser l'existant.</p>
+        <ul class="checks">
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Crée un plan depuis un volume Docker, une app hébergée ou un dossier.</span></li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Installe Backrest et connecte un dépôt restic&nbsp;: Backblaze B2, S3, local, rest-server.</span></li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Détecte les verrous restic périmés avant qu'ils bloquent tes sauvegardes.</span></li>
+        </ul>
+      </div>
+      <div class="backup glass reveal" style="--d:1" data-anim>
+        <div class="b-head">
+          <span class="ico ico-sm" style="--a:#fbbf24;--b:#f97316"><svg><use href="#i-backup"/></svg></span>
+          <div><b>minecraft-world</b><small>B2 · tous les jours à 04:00</small></div>
+          <span class="b-run">En cours</span>
+        </div>
+        <div class="b-progress" role="presentation"><i></i></div>
+        <ul class="snaps">
+          <li><span class="snap-dot"></span><span class="mono">a3f9c21</span><span>aujourd'hui 04:00</span><span class="mono dim">1,82 Go</span></li>
+          <li><span class="snap-dot"></span><span class="mono">7be104d</span><span>hier 04:00</span><span class="mono dim">1,79 Go</span></li>
+          <li><span class="snap-dot"></span><span class="mono">e02d6aa</span><span>lun. 04:00</span><span class="mono dim">1,77 Go</span></li>
+        </ul>
+        <div class="b-actions"><span class="chip">Lancer maintenant</span><span class="chip chip-accent">Restaurer dans un nouveau dossier</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SÉCURITÉ -->
+  <section class="section" id="securite" aria-labelledby="sec-title">
+    <div class="wrap">
+      <div class="head reveal">
+        <p class="eyebrow">Sécurité</p>
+        <h2 id="sec-title">Prudent par défaut.</h2>
+        <p class="lead">OrbitOS touche à tes serveurs. Il est donc conçu pour ne rien casser et ne rien exposer sans que tu le décides.</p>
+      </div>
+      <ul class="sec">
+        <li class="reveal"><svg class="i" aria-hidden="true"><use href="#i-host"/></svg><div><h3>Local d'abord</h3><p>Écoute sur 127.0.0.1 par défaut.</p></div></li>
+        <li class="reveal"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg><div><h3>Mot de passe</h3><p>Comparaison à temps constant, limitation de débit.</p></div></li>
+        <li class="reveal"><svg class="i" aria-hidden="true"><use href="#i-cookie"/></svg><div><h3>Session</h3><p>Cookie signé, HttpOnly, SameSite=Strict.</p></div></li>
+        <li class="reveal"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><div><h3>Requêtes</h3><p>Liste blanche d'hôtes contre le DNS rebinding, en-tête CSRF.</p></div></li>
+        <li class="reveal"><svg class="i" aria-hidden="true"><use href="#i-key"/></svg><div><h3>SSH</h3><p>Montage en lecture seule, vérification stricte des host keys.</p></div></li>
+        <li class="reveal"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg><div><h3>Lecture seule</h3><p><code>ORBIT_READONLY=1</code> et plus rien ne s'écrit.</p></div></li>
+        <li class="reveal"><svg class="i" aria-hidden="true"><use href="#i-history"/></svg><div><h3>Filets</h3><p>Copie horodatée avant chaque écriture, <code>nginx -t</code> avant chaque reload.</p></div></li>
+        <li class="reveal"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg><div><h3>Rien de définitif</h3><p>Les suppressions passent par une corbeille côté serveur.</p></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CONFIGURABLE -->
+  <section class="section" id="configurable" aria-labelledby="conf-title">
+    <div class="wrap split">
+      <div class="reveal">
+        <p class="eyebrow">Configurable</p>
+        <h2 id="conf-title">Ton OS, tes modules.</h2>
+        <p class="lead">Au premier lancement, l'onboarding te demande ce dont tu as besoin. Tu n'héberges pas de jeux&nbsp;? Le module disparaît. Tout se rechange ensuite dans Réglages.</p>
+        <ul class="integrations" aria-label="Intégrations">
+          <li><svg class="i" aria-hidden="true"><use href="#i-github"/></svg>GitHub</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-docker"/></svg>Portainer</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-backup"/></svg>Backrest</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>Authentik</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>CrowdSec</li>
+        </ul>
+      </div>
+      <div class="modules glass reveal" style="--d:1">
+        <p class="modules-title">Réglages · Modules <small>essaie</small></p>
+        <ul>
+          <li><span class="ico ico-sm" style="--a:#38bdf8;--b:#1d6fe0"><svg><use href="#i-docker"/></svg></span><span id="m1">Docker</span><button class="switch" role="switch" aria-checked="true" aria-labelledby="m1"><i></i></button></li>
+          <li><span class="ico ico-sm" style="--a:#34d399;--b:#0e9f8e"><svg><use href="#i-globe"/></svg></span><span id="m2">Domaines</span><button class="switch" role="switch" aria-checked="true" aria-labelledby="m2"><i></i></button></li>
+          <li><span class="ico ico-sm" style="--a:#f472b6;--b:#a855f7"><svg><use href="#i-game"/></svg></span><span id="m3">Hébergement</span><button class="switch" role="switch" aria-checked="false" aria-labelledby="m3"><i></i></button></li>
+          <li><span class="ico ico-sm" style="--a:#fbbf24;--b:#f97316"><svg><use href="#i-backup"/></svg></span><span id="m4">Sauvegarde</span><button class="switch" role="switch" aria-checked="true" aria-labelledby="m4"><i></i></button></li>
+          <li><span class="ico ico-sm" style="--a:#60a5fa;--b:#6366f1"><svg><use href="#i-shield"/></svg></span><span id="m5">Bouclier</span><button class="switch" role="switch" aria-checked="true" aria-labelledby="m5"><i></i></button></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- DÉMARRER -->
+  <section class="section" id="demarrer" aria-labelledby="start-title">
+    <div class="wrap narrow">
+      <div class="head reveal">
+        <p class="eyebrow">Démarrer</p>
+        <h2 id="start-title">Trois commandes.</h2>
+        <p class="lead">Il te faut Docker et un accès SSH à tes serveurs.</p>
+      </div>
+      <div class="code glass reveal">
+        <div class="code-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="code-title">terminal</span>
+          <button class="copy" type="button" data-copy="quickstart" aria-describedby="copy-status">
+            <svg class="i i-copy" aria-hidden="true"><use href="#i-copy"/></svg>
+            <svg class="i i-done" aria-hidden="true"><use href="#i-check"/></svg>
+            <span class="copy-label">Copier</span>
+          </button>
+        </div>
+<pre id="quickstart"><code><span class="c-cmd">git clone</span> https://github.com/Maanaaa/orbitos &amp;&amp; <span class="c-cmd">cd</span> orbitos
+<span class="c-cmd">cp</span> .env.example .env   <span class="c-com"># choisis ORBIT_PASSWORD</span>
+<span class="c-cmd">docker compose</span> up -d --build
+<span class="c-com"># → http://localhost:8080</span></code></pre>
+        <p class="sr-only" id="copy-status" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section" id="faq" aria-labelledby="faq-title">
+    <div class="wrap narrow">
+      <div class="head reveal">
+        <p class="eyebrow">FAQ</p>
+        <h2 id="faq-title">Questions fréquentes.</h2>
+      </div>
+      <div class="faq reveal">
+        <details>
+          <summary>C'est gratuit&nbsp;?</summary>
+          <p>Oui. OrbitOS est open source sous licence MIT. Le code est sur GitHub, tu l'héberges toi-même.</p>
+        </details>
+        <details>
+          <summary>Faut-il installer un agent sur les serveurs&nbsp;?</summary>
+          <p>Non. Tout passe par SSH et SFTP. Si tu peux faire <code>ssh mon-serveur</code>, OrbitOS peut le superviser.</p>
+        </details>
+        <details>
+          <summary>Quel système sur les serveurs&nbsp;?</summary>
+          <p>N'importe quel Linux accessible en SSH. Docker est facultatif&nbsp;: il sert aux apps qui le pilotent, comme Docker et Hébergement.</p>
+        </details>
+        <details>
+          <summary>Je peux l'exposer sur Internet&nbsp;?</summary>
+          <p>Par défaut il n'écoute que sur 127.0.0.1. Pour y accéder à distance, passe par un VPN (WireGuard, Tailscale) ou place-le derrière un SSO, par exemple Authentik en forward-auth. Ne l'ouvre pas tel quel au monde entier.</p>
+        </details>
+        <details>
+          <summary>Je peux désactiver des modules&nbsp;?</summary>
+          <p>Oui, dès l'onboarding ou plus tard dans Réglages. Un module désactivé disparaît simplement de l'interface.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <a class="brand" href="#" aria-label="OrbitOS, retour en haut">
+      <svg class="brand-mark" aria-hidden="true"><use href="#i-logo"/></svg><span>OrbitOS</span>
+    </a>
+    <p>Fait avec soin, pour ceux qui aiment leurs serveurs. Licence MIT.</p>
+    <a class="footer-link" href="https://github.com/Maanaaa/orbitos"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg>Maanaaa/orbitos</a>
+  </div>
+</footer>
+</body>
+</html>

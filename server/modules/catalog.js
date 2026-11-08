@@ -10,6 +10,7 @@
 // volumes[] : { key, path }  → volume « app-<id>-<key> »
 // fields[]  : { key (variable), label, type: text|number|select|bool|password, default, options,
 //               required, help, min, max, minLength, secret }
+// env.TZ    : remplacé par le fuseau horaire des Réglages au déploiement.
 // console   : { kind: 'exec', cmd: [...] } (commande lancée dans le conteneur, sortie renvoyée)
 //             { kind: 'stdin' } (écrit sur l'entrée standard du serveur, sortie dans les logs)
 // memory    : { default, min } en Mo ; memoryEnv : variable recevant ~75 % de la limite (JVM…)
@@ -28,7 +29,7 @@ export const TEMPLATES = [
     image: 'itzg/minecraft-server:latest',
     ports: [{ key: 'game', port: 25565, proto: 'tcp', label: 'Jeu' }],
     volumes: [{ key: 'data', path: '/data' }],
-    env: { EULA: 'TRUE', ENABLE_RCON: 'true', TZ: 'Europe/Paris' },
+    env: { EULA: 'TRUE', ENABLE_RCON: 'true', TZ: 'UTC' },
     memory: { default: 3072, min: 1024 },
     memoryEnv: 'MEMORY',
     stopGrace: 60,
@@ -58,7 +59,7 @@ export const TEMPLATES = [
     image: 'itzg/minecraft-bedrock-server:latest',
     ports: [{ key: 'game', port: 19132, proto: 'udp', label: 'Jeu', env: 'SERVER_PORT' }],
     volumes: [{ key: 'data', path: '/data' }],
-    env: { EULA: 'TRUE', TRANSPORT: 'raknet', TZ: 'Europe/Paris' },
+    env: { EULA: 'TRUE', TRANSPORT: 'raknet', TZ: 'UTC' },
     memory: { default: 1536, min: 512 },
     stdin: true,
     fields: [
@@ -159,7 +160,7 @@ export const TEMPLATES = [
     image: 'rouhim/beammp-server:latest',
     ports: [{ key: 'game', port: 30814, proto: 'both', label: 'Jeu', env: 'BEAMMP_PORT' }],
     volumes: [{ key: 'resources', path: '/beammp/Resources' }],
-    env: { TZ: 'Europe/Paris' },
+    env: { TZ: 'UTC' },
     memory: { default: 1024, min: 256 },
     stdin: true,
     fields: [
@@ -188,7 +189,7 @@ export const TEMPLATES = [
       { key: 'config', path: '/config' },
       { key: 'server', path: '/opt/valheim' },
     ],
-    env: { TZ: 'Europe/Paris', BACKUPS: 'true' },
+    env: { TZ: 'UTC', BACKUPS: 'true' },
     memory: { default: 4096, min: 2048 },
     stopGrace: 120,
     fields: [
@@ -215,7 +216,7 @@ export const TEMPLATES = [
       { key: 'query', port: 27015, proto: 'udp', label: 'Requêtes Steam', env: 'QUERY_PORT' },
     ],
     volumes: [{ key: 'data', path: '/palworld' }],
-    env: { TZ: 'Europe/Paris', RCON_ENABLED: 'true', BACKUP_ENABLED: 'true', DELETE_OLD_BACKUPS: 'true', OLD_BACKUP_DAYS: '14' },
+    env: { TZ: 'UTC', RCON_ENABLED: 'true', BACKUP_ENABLED: 'true', DELETE_OLD_BACKUPS: 'true', OLD_BACKUP_DAYS: '14' },
     memory: { default: 8192, min: 4096 },
     stopGrace: 60,
     fields: [

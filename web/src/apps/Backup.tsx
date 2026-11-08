@@ -85,6 +85,7 @@ export default function Backup({ win }: AppProps) {
   const [wizard, setWizard] = useState<any>(null);
   const [qv, setQ] = useState('');
   const [creds, setCreds] = useState(false);
+  const [addRepo, setAddRepo] = useState(false);
 
   useEffect(() => {
     if (win.props.prefill) setWizard(win.props.prefill);
@@ -103,7 +104,7 @@ export default function Backup({ win }: AppProps) {
     if (
       !(await confirm({
         title: `Déverrouiller le dépôt ${repo} ?`,
-        message: 'Lance « restic unlock » via Backrest : seuls les verrous orphelins (processus disparus) sont retirés, une opération réellement en cours n’est pas touchée. À faire hors des heures de sauvegarde (04:00–04:30).',
+        message: 'Lance « restic unlock » via Backrest : seuls les verrous orphelins (processus disparus) sont retirés, une opération réellement en cours n’est pas touchée. À faire en dehors des horaires de sauvegarde.',
         confirm: 'Déverrouiller',
       }))
     )
@@ -135,7 +136,7 @@ export default function Backup({ win }: AppProps) {
             <KeyRound size={13} />
           </button>
         )}
-        <button className="btn primary" disabled={!d?.plans} onClick={() => setWizard({})}>
+        <button className="btn primary" disabled={!d?.plans || !d.repos?.length} onClick={() => setWizard({})}>
           <Plus size={14} /> Nouvelle sauvegarde
         </button>
       </div>
@@ -157,7 +158,10 @@ export default function Backup({ win }: AppProps) {
             <Loading />
           ) : d && !d.found ? (
             <Empty icon={<DatabaseBackup size={38} strokeWidth={1.3} />} title={`Pas de Backrest sur ${sname}`}>
-              <div style={{ maxWidth: 400 }}>OrbitOS pilote Backrest (conteneur garethgeorge/backrest, port 9898 publié en local). Installe-le sur ce serveur ou choisis un autre serveur dans la barre de menus.</div>
+              <div style={{ maxWidth: 400 }}>OrbitOS pilote Backrest (qui exécute restic). Installe-le sur ce serveur en un clic, ou choisis un autre serveur dans la barre de menus.</div>
+              <button className="btn primary" style={{ marginTop: 8 }} onClick={() => useOS.getState().open('settings', { section: 'backup' }, { singleton: true, size: { w: 900, h: 620 } })}>
+                Installer Backrest…
+              </button>
             </Empty>
           ) : d?.error ? (
             <Empty icon={<AlertTriangle size={36} strokeWidth={1.3} />} title="Backrest ne répond pas">
@@ -178,6 +182,10 @@ export default function Backup({ win }: AppProps) {
                     <span className="faint mono ellipsis" style={{ maxWidth: 360 }}>{r.uri}</span>
                   </div>
                 ))}
+                <button className="btn sm ghost" onClick={() => setAddRepo(true)}>
+                  <Plus size={11} /> Dépôt restic
+                </button>
+                {!d.repos.length && <span className="faint" style={{ fontSize: 12, alignSelf: 'center' }}>Ajoute d’abord un dépôt restic pour créer des plans.</span>}
               </div>
               <div className="group-box">
                 {plans.map((p: Plan) => (
@@ -222,6 +230,7 @@ export default function Backup({ win }: AppProps) {
           }}
         />
       )}
+      {addRepo && <AddRepoSheet sid={sid} onClose={() => setAddRepo(false)} onDone={() => (setAddRepo(false), st.reload(true))} />}
       {creds && <Credentials sid={sid} onClose={() => (setCreds(false), st.reload())} />}
     </div>
   );
@@ -683,7 +692,7 @@ function NewPlan({ sid, status, prefill, onClose, onCreated }: { sid: string; st
         <div>
           <div className="section-title" style={{ marginTop: 0 }}>Quand</div>
           <ScheduleEditor s={sched} set={setSched} />
-          <div className="faint" style={{ fontSize: 11.5, marginTop: -4, marginBottom: 10 }}>Créneau proposé après les plans existants (fenêtre nocturne 04:00–04:30).</div>
+          <div className="faint" style={{ fontSize: 11.5, marginTop: -4, marginBottom: 10 }}>Créneau libre proposé après les plans existants de la nuit, pour étaler la charge.</div>
           <div className="section-title">Combien de temps garder</div>
           <RetentionEditor r={ret} set={setRet} />
           <div className="section-title">Exclusions (une par ligne)</div>
@@ -775,6 +784,116 @@ function Credentials({ sid, onClose }: { sid: string; onClose: () => void }) {
       <label className="field">
         <span>Mot de passe</span>
         <input className="input" type="password" value={p} onChange={(e) => setP(e.target.value)} />
+      </label>
+    </Sheet>
+  );
+}
+
+// ───────────────────────── Ajout d'un dépôt restic ─────────────────────────
+
+const REPO_TYPES: [string, string, string][] = [
+  ['b2', 'Backblaze B2', 'Bucket B2 et clé d’application'],
+  ['s3', 'S3 compatible', 'AWS, Wasabi, Scaleway, MinIO, R2…'],
+  ['local', 'Dossier du serveur', 'Ex. /srv/restic/<nom> (disque séparé de préférence)'],
+  ['rest', 'rest-server', 'https://utilisateur:motdepasse@hôte/chemin'],
+];
+
+export function AddRepoSheet({ sid, onClose, onDone }: { sid: string; onClose: () => void; onDone: () => void }) {
+  const [f, setF] = useState<any>({ type: 'b2', id: '', bucket: '', path: '', keyId: '', secret: '', endpoint: 'https://', region: '', url: 'https://', password: '' });
+  const [busy, setBusy] = useState(false);
+  const set = (k: string, v: string) => setF((x: any) => ({ ...x, [k]: v }));
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const r: any = await sapi(sid, 'backrest/repos', { body: f });
+      if (r.password) {
+        await confirm({
+          title: 'Note le mot de passe du dépôt',
+          message: (
+            <div>
+              Sans lui, <b>les sauvegardes sont illisibles</b>. Il ne sera plus affiché (Backrest le conserve dans sa configuration).
+              <div className="mono" style={{ marginTop: 10, padding: 10, background: 'rgba(255,255,255,.06)', borderRadius: 8, userSelect: 'all', wordBreak: 'break-all' }}>{r.password}</div>
+            </div>
+          ),
+          confirm: 'C’est noté',
+        });
+      }
+      toast(`Dépôt « ${r.id} » ajouté et initialisé`, 'ok');
+      onDone();
+    } catch (e: any) {
+      toast('Ajout impossible', 'error', e.message);
+    }
+    setBusy(false);
+  };
+  const field = (k: string, label: string, props: any = {}) => (
+    <label className="field" key={k}>
+      <span>{label}</span>
+      <input className="input mono" value={f[k]} onChange={(e) => set(k, e.target.value.trim())} {...props} />
+    </label>
+  );
+  return (
+    <Sheet
+      wide
+      title="Ajouter un dépôt restic"
+      subtitle="Backrest l’initialise (restic init) s’il est vide, puis vérifie et nettoie chaque mois."
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>
+            Annuler
+          </button>
+          <button className="btn primary" disabled={busy || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{1,40}$/.test(f.id)} onClick={submit}>
+            {busy ? <Spinner size={12} /> : <Plus size={13} />} Ajouter
+          </button>
+        </>
+      }
+    >
+      <div className="type-cards" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        {REPO_TYPES.map(([id, t, d]) => (
+          <button key={id} className={`type-card ${f.type === id ? 'on' : ''}`} onClick={() => set('type', id)}>
+            <Cloud size={16} color="var(--cyan)" />
+            <b>{t}</b>
+            <small>{d}</small>
+          </button>
+        ))}
+      </div>
+      <div className="field-row">
+        {field('id', 'Identifiant du dépôt', { placeholder: 'offsite-b2' })}
+        {f.type === 'local' && field('path', 'Dossier sur le serveur', { placeholder: '/srv/restic/principal' })}
+        {f.type === 'rest' && field('url', 'URL')}
+      </div>
+      {f.type === 'b2' && (
+        <>
+          <div className="field-row">
+            {field('bucket', 'Bucket')}
+            {field('path', 'Chemin dans le bucket', { placeholder: 'restic' })}
+          </div>
+          <div className="field-row">
+            {field('keyId', 'keyID')}
+            {field('secret', 'applicationKey', { type: 'password' })}
+          </div>
+        </>
+      )}
+      {f.type === 's3' && (
+        <>
+          <div className="field-row">
+            {field('endpoint', 'Endpoint', { placeholder: 'https://s3.eu-central-003.backblazeb2.com' })}
+            {field('region', 'Région (optionnel)')}
+          </div>
+          <div className="field-row">
+            {field('bucket', 'Bucket')}
+            {field('path', 'Préfixe (optionnel)')}
+          </div>
+          <div className="field-row">
+            {field('keyId', 'Access key')}
+            {field('secret', 'Secret key', { type: 'password' })}
+          </div>
+        </>
+      )}
+      <label className="field">
+        <span>Mot de passe de chiffrement restic</span>
+        <input className="input mono" type="password" value={f.password} onChange={(e) => set('password', e.target.value)} placeholder="laisser vide pour en générer un" />
+        <small>Pour rattacher un dépôt existant, saisis son mot de passe actuel.</small>
       </label>
     </Sheet>
   );

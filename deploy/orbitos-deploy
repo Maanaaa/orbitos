@@ -105,7 +105,9 @@ if healthy; then
 fi
 
 printf '✖ OrbitOS ne répond pas : retour à l’image précédente\n' >&2
-docker logs --tail 30 "$(compose ps -q | head -1)" 2>&1 | sed 's/^/  │ /' >&2 || true
+# Logs écrits sur le serveur, pas dans la sortie (visible publiquement dans la CI d'un dépôt public).
+{ date; docker logs --tail 80 "$(compose ps -q | head -1)" 2>&1; } >> /var/log/orbitos-deploy.log 2>&1 || true
+printf '  Logs du conteneur : /var/log/orbitos-deploy.log sur le serveur\n' >&2
 if docker image inspect orbitos:previous >/dev/null 2>&1; then
   docker tag orbitos:previous "$IMAGE"
   compose up -d --force-recreate --no-build >/dev/null 2>&1

@@ -124,7 +124,7 @@ export default function Servers(_: AppProps) {
   );
 }
 
-function AddServer({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+export function AddServer({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState({ id: '', name: '', host: '', port: '22', user: 'root', identityFile: '' });
   const [keys, setKeys] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Bell, Check, ChevronDown, Info, Lock, Search, Server as ServerIcon, X, Box, Globe, AppWindow, Zap } from 'lucide-react';
+import { SlidersHorizontal, AlertTriangle, Bell, Check, ChevronDown, Info, Lock, Search, Server as ServerIcon, X, Box, Globe, AppWindow, Zap } from 'lucide-react';
 import { useOS, toast, type Server } from './store';
 import { WindowFrame } from './Window';
-import { APPS, appById, AppIcon } from '../apps/registry';
+import { APPS, appById, AppIcon, useEnabledApps, appEnabled } from '../apps/registry';
+import Onboarding from './Onboarding';
 import { api, sapi, useApi } from '../lib/api';
 import { bytes, fuzzy, duration } from '../lib/format';
 import { Menu, Ring, Kbd, type MenuEntry } from './ui';
@@ -41,7 +42,8 @@ function useMetrics(sid: string) {
 }
 
 export function MenuBar({ metrics }: { metrics: any }) {
-  const { servers, serverId, setServer, open, wins, focused, doctor, readonly } = useOS();
+  const { servers, serverId, setServer, open, wins, focused, doctor, readonly, settings } = useOS();
+  const enabled = useEnabledApps();
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuEntry[]; key: string } | null>(null);
   const now = useClock();
   const active = wins.find((w) => w.id === focused);
@@ -67,6 +69,7 @@ export function MenuBar({ metrics }: { metrics: any }) {
         className={`mb-item ${menu?.key === 'orbit' ? 'open' : ''}`}
         onClick={show('orbit', [
           { label: 'À propos d’OrbitOS', icon: <Info size={14} />, onClick: () => open('about', {}, { singleton: true, size: { w: 460, h: 400 } }) },
+          { label: 'Réglages…', icon: <SlidersHorizontal size={14} />, onClick: () => open('settings', {}, { singleton: true, size: appById('settings')!.size }) },
           'sep',
           { label: 'Rechercher…', icon: <Search size={14} />, kbd: '⌘K', onClick: () => useOS.getState().set({ spotlight: true }) },
           'sep',
@@ -75,12 +78,12 @@ export function MenuBar({ metrics }: { metrics: any }) {
       >
         <img src="/orbit.svg" width={16} height={16} alt="" style={{ borderRadius: 4 }} />
       </button>
-      <button className="mb-item mb-app">{activeApp?.name || 'OrbitOS'}</button>
+      <button className="mb-item mb-app">{activeApp?.name || settings?.instanceName || 'OrbitOS'}</button>
       <button
         className={`mb-item ${menu?.key === 'apps' ? 'open' : ''}`}
         onClick={show('apps', [
           { header: 'Applications' },
-          ...APPS.filter((a) => a.dock).map((a) => ({ label: a.name, icon: <a.icon size={14} />, onClick: () => open(a.id, {}, { singleton: a.singleton, size: a.size }) })),
+          ...enabled.filter((a) => a.dock).map((a) => ({ label: a.name, icon: <a.icon size={14} />, onClick: () => open(a.id, {}, { singleton: a.singleton, size: a.size }) })),
         ])}
       >
         Aller
@@ -149,10 +152,12 @@ export function MenuBar({ metrics }: { metrics: any }) {
         <ChevronDown size={12} className="faint" />
       </button>
 
-      <button className="mb-item" onClick={() => open('doctor', {}, { singleton: true, size: appById('doctor')!.size })} title="Doctor">
-        <Bell size={14} />
-        {total > 0 && <span className="badge red" style={{ height: 16, padding: '0 5px', fontSize: 10 }}>{total}</span>}
-      </button>
+      {appEnabled('doctor', settings) && (
+        <button className="mb-item" onClick={() => open('doctor', {}, { singleton: true, size: appById('doctor')!.size })} title="Doctor">
+          <Bell size={14} />
+          {total > 0 && <span className="badge red" style={{ height: 16, padding: '0 5px', fontSize: 10 }}>{total}</span>}
+        </button>
+      )}
       <button className="mb-item" onClick={() => useOS.getState().set({ spotlight: true })} title="Rechercher (⌘K)">
         <Search size={14} />
       </button>
@@ -168,7 +173,7 @@ export function MenuBar({ metrics }: { metrics: any }) {
 
 export function Dock() {
   const { wins, open, focus, doctor } = useOS();
-  const dockApps = APPS.filter((a) => a.dock);
+  const dockApps = useEnabledApps().filter((a) => a.dock);
   const extra = [...new Set(wins.filter((w) => !appById(w.app)?.dock).map((w) => w.app))];
 
   const click = (appId: string) => {
@@ -293,7 +298,7 @@ export function Spotlight() {
   const items = useMemo<SpItem[]>(() => {
     const close = () => set({ spotlight: false });
     const list: SpItem[] = [];
-    for (const a of APPS.filter((a) => a.dock || a.id === 'about'))
+    for (const a of APPS.filter((a) => (a.dock || a.id === 'about') && appEnabled(a.id, useOS.getState().settings)))
       list.push({ group: 'Applications', label: a.name, sub: a.description, icon: <AppIcon app={a} size={26} />, run: () => (close(), open(a.id, {}, { singleton: a.singleton, size: a.size })) });
     for (const s of servers.filter((s) => !s.hidden))
       list.push({ group: 'Serveurs', label: s.name, sub: `${s.user}@${s.host}`, icon: <ServerIcon size={18} />, run: () => (close(), setServer(s.id), toast(`Serveur actif : ${s.name}`)) });
@@ -465,9 +470,19 @@ export function Desktop() {
     if (error) useOS.setState((s) => ({ servers: s.servers.map((x) => (x.id === serverId ? { ...x, lastError: error.message } : x)) }));
   }, [error, serverId]);
 
+  // Réglages de l'instance (modules, nom, premier lancement)
+  useEffect(() => {
+    api('/api/settings').then((s) => set({ settings: s })).catch(() => {});
+  }, [set]);
+  const settings = useOS((s) => s.settings);
+  const doctorOn = appEnabled('doctor', settings);
+
   // Doctor en tâche de fond : badge du dock et widget santé
   useEffect(() => {
-    if (!serverId) return;
+    if (!serverId || !doctorOn) {
+      set({ doctor: null });
+      return;
+    }
     let alive = true;
     const load = () => sapi(serverId, 'doctor').then((d) => alive && set({ doctor: d.summary })).catch(() => {});
     const t0 = setTimeout(load, 2500);
@@ -477,7 +492,7 @@ export function Desktop() {
       clearTimeout(t0);
       clearInterval(t);
     };
-  }, [serverId, set]);
+  }, [serverId, set, doctorOn]);
 
   // ⌘K / Ctrl+K
   useEffect(() => {
@@ -502,6 +517,7 @@ export function Desktop() {
       <Dock />
       <Spotlight />
       <Dialogs />
+      {settings && !settings.onboarded && <Onboarding />}
       <Toasts />
     </>
   );

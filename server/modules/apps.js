@@ -16,6 +16,7 @@ import * as github from './github.js';
 import * as portainer from './portainer.js';
 import { trash } from './files.js';
 import { getTemplate, fieldValue, RUNTIMES } from './catalog.js';
+import * as settings from '../settings.js';
 
 const APPS_FILE = path.join(DATA_DIR, 'apps.json');
 const LOG_DIR = path.join(DATA_DIR, 'app-jobs');
@@ -398,6 +399,7 @@ function runtimeCommand(a) {
 function finalEnv(a) {
   const t = getTemplate(a.template);
   const env = { ...t.env };
+  if ('TZ' in env) env.TZ = settings.get().timezone; // fuseau choisi dans les Réglages
   if (t.memoryEnv) env[t.memoryEnv] = `${Math.max(512, Math.floor(a.memory * 0.75))}M`;
   for (const p of a.ports || []) if (p.env) env[p.env] = String(p.host);
   return { ...env, ...a.env };

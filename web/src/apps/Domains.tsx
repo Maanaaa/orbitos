@@ -443,6 +443,8 @@ function Certs({ sid, data, reload, onVhost }: { sid: string; data: any; reload:
 function Wizard({ sid, ctx, onClose, onDone }: { sid: string; ctx: any; onClose: () => void; onDone: (name: string) => void }) {
   const server = useOS((s) => s.servers.find((x) => x.id === sid));
   const baseDomain = useMemo(() => {
+    const preferred = useOS.getState().settings?.defaultDomain;
+    if (preferred) return preferred;
     const counts: Record<string, number> = {};
     for (const v of ctx.vhosts) for (const n of v.serverNames) {
       const parts = n.split('.');

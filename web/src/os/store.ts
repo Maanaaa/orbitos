@@ -35,6 +35,16 @@ type Dialog =
 
 type AppSize = { w: number; h: number };
 
+export type Settings = {
+  instanceName: string;
+  modules: Record<string, boolean>;
+  defaultDomain: string;
+  timezone: string;
+  onboarded: boolean;
+  passwordFromEnv: boolean;
+  catalog: { id: string; name: string; group: string; description: string; apiGuarded: boolean }[];
+};
+
 type State = {
   wins: Win[];
   focused: string | null;
@@ -46,6 +56,7 @@ type State = {
   spotlight: boolean;
   doctor: { crit: number; warn: number; info: number } | null;
   readonly: boolean;
+  settings: Settings | null;
   open: (app: string, props?: Record<string, any>, opts?: { size?: AppSize; singleton?: boolean; title?: string }) => string;
   close: (id: string) => void;
   focus: (id: string) => void;
@@ -88,6 +99,7 @@ export const useOS = create<State>((set, get) => ({
   spotlight: false,
   doctor: null,
   readonly: false,
+  settings: null,
 
   open(app, props = {}, opts = {}) {
     const { wins, z } = get();

@@ -1,22 +1,31 @@
 # OrbitOS
 
-Un superviseur de serveurs qui ressemble à un OS, dans le navigateur. Fenêtres, dock, Spotlight, widgets… au-dessus de **SSH** : rien à installer sur les serveurs.
+**Tes serveurs, comme un OS.** Un superviseur qui ressemble à macOS, dans le navigateur : fenêtres, Dock, Spotlight, widgets… au-dessus de **SSH**. Rien à installer sur les serveurs.
 
-## Démarrage
+[Site](https://maanaaa.github.io/orbitos/) · [Démarrer](#démarrer) · [Configuration](#configuration) · [Sécurité](#sécurité) · Licence MIT
+
+> *A browser-based, macOS-like control panel for your Linux servers, over plain SSH (agentless): Docker, files, nginx domains, one-click game/voice/bot hosting, Backrest/restic backups. French UI.*
+
+## Démarrer
+
+Prérequis : Docker (avec compose) sur la machine qui héberge OrbitOS, et un accès SSH par clé à tes serveurs (n'importe quel Linux ; Docker, nginx, ufw… sont détectés et optionnels).
 
 ```bash
-# 1. Une seule fois : faire pointer orbitos.mana vers le Mac
-echo "127.0.0.1 orbitos.mana" | sudo tee -a /etc/hosts
-
-# 2. Lancer (le vhost orbitos.mana démarre avec le conteneur)
+git clone https://github.com/Maanaaa/orbitos && cd orbitos
+cp .env.example .env        # choisis ORBIT_PASSWORD
 docker compose up -d --build
-
-# 3. Ouvrir http://orbitos.mana  (mot de passe : ORBIT_PASSWORD dans .env)
+# → http://localhost:8080
 ```
 
-Le conteneur contient **nginx** (vhost `orbitos.mana`, WebSockets inclus) devant le serveur Node. `restart: unless-stopped` : il redémarre avec Docker Desktop.
+Au premier lancement, un accueil guidé propose : nom de l'instance, fuseau horaire, serveurs (les alias de `~/.ssh/config` sont détectés, d'autres s'ajoutent dans l'interface) et modules à garder. Tout se modifie ensuite dans **Réglages**.
 
-> **Port 80 déjà pris ?** Mets `ORBIT_HTTP_PORT=8080` dans `.env` (→ http://orbitos.mana:8080).
+### Sur un serveur (accès distant)
+
+OrbitOS ouvre un shell sur tes machines : ne l'expose jamais directement.
+
+1. Dossier SSH dédié, par ex. `/opt/orbitos/ssh/` avec `config`, `known_hosts` et une clé dont la partie publique est dans les `authorized_keys` des serveurs à superviser. Dans `.env` : `ORBIT_SSH_DIR=/opt/orbitos/ssh`.
+2. `ORBIT_HOSTS=orbitos.example.com` (liste blanche des noms d'hôte, anti DNS-rebinding).
+3. Un reverse proxy TLS devant `127.0.0.1:8080` (WebSockets activés, `proxy_read_timeout 1h`), protégé par un **SSO** (Authentik, Authelia…) ou un **VPN**. L'app Domaines sait générer ce vhost, forward-auth Authentik compris.
 
 ## Applications
 
@@ -36,28 +45,51 @@ Le conteneur contient **nginx** (vhost `orbitos.mana`, WebSockets inclus) devant
 | **Bouclier** | Exposition réelle à Internet, règles UFW, CrowdSec et fail2ban (débannir), config SSH, mises à jour en attente. |
 | **Serveurs** | Les alias de `~/.ssh/config` + ceux ajoutés dans l'interface, test de connexion, droits (root/sudo/docker). |
 | **Journal** | Chaque action qui modifie un serveur est consignée, export Markdown. |
+| **Réglages** | Nom de l'instance, fuseau et domaine par défaut, **modules activés ou non**, intégrations (GitHub, Portainer), installation de Backrest et ajout de dépôts restic, mot de passe. Accueil guidé au premier lancement. |
 
 **⌘K** : Spotlight (apps, conteneurs, domaines, serveurs, actions comme « Shell dans X » ou « Logs de Y »).
 
+**⌘K** : Spotlight (apps, conteneurs, domaines, serveurs, actions comme « Shell dans X » ou « Logs de Y »).
+
+## Configuration
+
+### Variables d'environnement
+
+| Variable | Défaut | Rôle |
+| :--- | :--- | :--- |
+| `ORBIT_PASSWORD` | généré au 1er lancement (affiché dans les logs) | Mot de passe de connexion. S'il est défini, il ne se change pas depuis l'interface. |
+| `ORBIT_HTTP_PORT` | `8080` | Port local (lié à `127.0.0.1`). |
+| `ORBIT_HOSTS` | `localhost,127.0.0.1` | Noms d'hôte acceptés. |
+| `ORBIT_SSH_DIR` | `~/.ssh` | Dossier SSH monté **en lecture seule**. |
+| `ORBIT_READONLY` | `0` | `1` = consultation seule, aucune action ne modifie les serveurs. |
+| `TZ` | `Etc/UTC` | Fuseau du conteneur (celui des apps hébergées se règle dans Réglages). |
+
+### Dans l'interface (Réglages)
+
+- **Modules** : coupe ce dont tu n'as pas besoin. Hébergement, Sauvegarde, Doctor, Bouclier et Services sont aussi bloqués côté API.
+- **Intégrations** : token GitHub *fine-grained* (Contents : lecture) pour les sites et bots depuis un dépôt privé ; Portainer (URL, clé `ptr_…`, endpoint, **serveur géré**) pour que sites et applications deviennent des stacks Portainer, sinon `docker compose` est utilisé.
+- **Sauvegarde** : pour chaque serveur, installe Backrest en un clic (conteneur lié à `127.0.0.1:9898`, dossiers de l'hôte montés en lecture seule sous `/data/…`, dépôts locaux dans `/srv/restic`), puis ajoute un dépôt restic : **Backblaze B2, S3 compatible, dossier local ou rest-server**. Backrest l'initialise ; le mot de passe de chiffrement généré n'est affiché qu'une fois, note-le. Un Backrest existant est détecté et piloté tel quel (y compris avec authentification).
+
+Toutes les données d'OrbitOS (serveurs ajoutés, réglages, journal, secrets en `0600`, clés d'hôte mémorisées) vivent dans le volume `orbitos-data`.
+
 ## Sécurité
 
-- **Accès** : lié à `127.0.0.1` uniquement ; mot de passe (comparaison à temps constant, limitation des tentatives) ; cookie de session signé `HttpOnly` + `SameSite=Strict` ; liste blanche du header `Host` (anti DNS-rebinding) ; en-tête `X-Orbit` obligatoire sur toute mutation (anti-CSRF) ; vérification de l'`Origin` sur les WebSockets.
-- **SSH** : `~/.ssh` monté **en lecture seule**, les clés ne sont jamais copiées. Les clés d'hôte sont **vérifiées strictement** contre `known_hosts` : si une clé a changé, la connexion est refusée. Un serveur jamais vu est accepté au premier contact puis mémorisé (comme `StrictHostKeyChecking=accept-new`).
-- **Commandes** : tous les paramètres sont validés (noms Docker, domaines, unités, chemins) et échappés pour le shell.
-- **Garde-fous** : sauvegarde horodatée dans `/var/backups/orbitos/` avant toute écriture ; `nginx -t` avant chaque reload avec rollback ; aucune suppression définitive (corbeille serveur dans `/var/backups/orbitos/trash/`) ; chemins système protégés ; confirmation pour chaque action destructive.
-- **Lecture seule** : `ORBIT_READONLY=1` dans `.env` bloque toutes les mutations.
-- Utilisateur non-root (ex. `ubuntu`) : `sudo -n` est utilisé automatiquement quand il est disponible sans mot de passe.
+- **Accès** : lié à `127.0.0.1` ; mot de passe comparé à temps constant avec limitation des tentatives ; cookie de session signé `HttpOnly` + `SameSite=Strict` ; liste blanche du header `Host` ; en-tête `X-Orbit` obligatoire sur toute mutation (anti-CSRF) ; `Origin` vérifiée sur les WebSockets. Changer le mot de passe déconnecte les autres sessions.
+- **SSH** : clés montées en lecture seule, jamais copiées ; clés d'hôte **vérifiées strictement** contre `known_hosts` (un serveur jamais vu est mémorisé au premier contact, comme `accept-new`).
+- **Commandes** : paramètres validés (noms Docker, domaines, unités, chemins) et échappés pour le shell ; secrets transmis par stdin, jamais en argument visible dans `ps`.
+- **Garde-fous** : sauvegarde horodatée dans `/var/backups/orbitos/` avant toute écriture ; `nginx -t` avant chaque reload avec rollback ; corbeille serveur au lieu de suppressions définitives ; copie de `config.json` avant toute modification de Backrest ; restaurations dans un dossier neuf ; confirmation pour chaque action destructive.
+- Utilisateur non-root : `sudo -n` est utilisé automatiquement s'il est disponible sans mot de passe.
 
-## Déploiement continu (GitHub Actions)
+## Déploiement continu (optionnel)
 
-Le workflow `.github/workflows/deploy.yml` vérifie le code à chaque push et pull request. Sur `main`, il déploie **si la variable de dépôt `DEPLOY_HOST` existe** (les forks ne déploient jamais) :
+`.github/workflows/deploy.yml` vérifie le code à chaque push et pull request. Sur `main`, il déploie **seulement si la variable de dépôt `DEPLOY_HOST` existe** (un fork ne déploie jamais) :
 
-1. Copier `deploy/orbitos-deploy` dans `/usr/local/bin/` sur le serveur (`chmod 755`) et écrire `/etc/orbitos-deploy.conf` (`COMPOSE_FILE`, `ENV_FILE`, `HEALTH_URL`, `HEALTH_HOST` : voir l'en-tête du script).
-2. Générer une clé dédiée et la restreindre au script dans `authorized_keys` :
+1. Copier `deploy/orbitos-deploy` dans `/usr/local/bin/` (`chmod 755`) et écrire `/etc/orbitos-deploy.conf` (`COMPOSE_FILE`, `ENV_FILE`, `HEALTH_URL`, `HEALTH_HOST` : voir l'en-tête du script).
+2. Clé dédiée restreinte au script dans `authorized_keys` :
    `restrict,command="/usr/local/bin/orbitos-deploy" ssh-ed25519 AAAA… github-actions-orbitos`
-3. Sur GitHub : secrets `DEPLOY_SSH_KEY` (clé privée) et `DEPLOY_KNOWN_HOSTS` (`ssh-keyscan` vérifié), variables `DEPLOY_HOST` et `DEPLOY_USER`.
+3. Secrets GitHub `DEPLOY_SSH_KEY` et `DEPLOY_KNOWN_HOSTS`, variables `DEPLOY_HOST` et `DEPLOY_USER`.
 
-À chaque déploiement : build d'une image candidate (la prod n'est pas touchée si le build échoue), sauvegarde des sources dans `/var/backups/orbitos-src/`, recréation du conteneur, contrôle de santé et **retour automatique à l'image précédente** s'il échoue. Les fichiers propres au serveur (`ssh/`, `.env`, `compose.yml`, `local/`) ne sont jamais écrasés.
+Chaque déploiement construit une image candidate (la prod n'est pas touchée si le build échoue), sauvegarde les sources, recrée le conteneur, contrôle la santé et **revient à l'image précédente** en cas d'échec.
 
 ## Développement
 
@@ -69,15 +101,18 @@ cd web && npm run dev                      # interface sur http://localhost:5173
 
 ```
 server/            API Fastify + WebSockets
-  ssh.js           registre des serveurs, pool ssh2, vérification des clés d'hôte, exec/PTY/SFTP
-  modules/         system · docker · files · nginx · doctor · sites · apps · catalog · backrest
-  journal.js       journal des actions (JSONL)
+  ssh.js           registre des serveurs, pool ssh2, clés d'hôte, exec/PTY/SFTP/flux
+  settings.js      réglages de l'instance et modules
+  modules/         system · docker · files · nginx · doctor · sites · apps · catalog · backrest · github · portainer
 web/src/
-  os/              gestionnaire de fenêtres, dock, barre de menus, Spotlight, composants
+  os/              gestionnaire de fenêtres, Dock, barre de menus, Spotlight, accueil
   apps/            une app par fichier (chargées à la demande)
-docker/            vhost nginx orbitos.mana + entrypoint
+site/              site vitrine (GitHub Pages)
+deploy/            script de déploiement continu
 ```
 
-## Pistes suivantes
+Ajouter un jeu ou un service au catalogue d'Hébergement : un objet dans `server/modules/catalog.js` (image, ports, volumes, réglages → variables d'environnement, console). Les contributions sont bienvenues.
 
-Dumps des bases avant sauvegarde, Database Studio (Postgres/MariaDB/SQLite des conteneurs), gestionnaire de `.env`, mode maintenance par site, serveurs de jeu à la demande.
+## Licence
+
+[MIT](LICENSE)

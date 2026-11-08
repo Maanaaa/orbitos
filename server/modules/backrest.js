@@ -7,7 +7,9 @@
 // Chemins : l'utilisateur raisonne en chemins de l'hôte ; ils sont traduits en chemins du
 // conteneur Backrest d'après ses montages (ex. /var/lib/docker/volumes → /data/docker-volumes).
 import path from 'node:path';
-import { conn, dockerPrefix } from '../ssh.js';
+import { conn, dockerPrefix, stream } from '../ssh.js';
+import * as settings from '../settings.js';
+import crypto from 'node:crypto';
 import { q, bad, HttpError, stamp } from '../util.js';
 import * as journal from '../journal.js';
 import * as secrets from '../secrets.js';
@@ -352,7 +354,7 @@ export async function restore(sid, planId, body) {
   const plan = (cfg.plans || []).find((p) => p.id === planId);
   if (!plan) throw new HttpError(404, 'Plan introuvable');
   // Restauration toujours dans un dossier neuf d'un montage inscriptible (jamais par-dessus les données en place).
-  const rw = info.mounts.find((m) => m.rw && m.dest !== '/config');
+  const rw = info.mounts.find((m) => m.rw && m.dest === '/data/tmp') || info.mounts.find((m) => m.rw && !['/config', '/repos'].includes(m.dest));
   if (!rw) throw bad('Aucun montage inscriptible dans Backrest pour restaurer (ex. /tmp → /data/tmp)');
   const target = `${rw.dest}/orbitos-restore/${planId}-${body.snapshotId.slice(0, 8)}-${stamp()}`;
   const sub = body.path ? String(body.path) : '';
@@ -382,4 +384,157 @@ export async function setCredentials(sid, { username, password }) {
   tokens.delete(sid);
   journal.log({ server: sid, kind: 'integration.backrest', target: username || 'retiré', ok: true });
   return { ok: true };
+}
+
+// ───────── Installation de Backrest ─────────
+// Pour un serveur qui n'en a pas : conteneur garethgeorge/backrest lié à 127.0.0.1:9898, dossiers
+// courants de l'hôte montés en lecture seule sous /data/…, un dossier inscriptible pour les dépôts
+// locaux (/srv/restic → /repos) et /tmp pour les restaurations.
+const INSTALL_DIR = '/opt/orbitos-backrest';
+const MOUNTS = [
+  ['/var/lib/docker/volumes', '/data/docker-volumes', 'ro'],
+  ['/opt', '/data/opt', 'ro'],
+  ['/srv', '/data/srv', 'ro'],
+  ['/home', '/data/home', 'ro'],
+  ['/root', '/data/root', 'ro'],
+  ['/etc', '/data/etc', 'ro'],
+  ['/var/www', '/data/var/www', 'ro'],
+  ['/var/backups', '/data/backups', 'ro'],
+  ['/srv/restic', '/repos', 'rw'],
+  ['/tmp', '/data/tmp', 'rw'],
+];
+
+export async function install(sid, body = {}) {
+  const info = await discover(sid, { force: true });
+  if (info.found) throw bad(`Backrest est déjà installé (${info.container})`);
+  const port = Number(body.port || 9898);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw bad('Port invalide');
+  const dp = await dockerPrefix(sid);
+  const dv = await conn(sid).exec(`${dp}docker compose version --short 2>/dev/null`);
+  if (dv.code !== 0) throw bad('Docker (avec le plugin compose) est requis');
+  const tz = settings.get().timezone;
+  const compose = `# Backrest installé par OrbitOS — interface et API sur 127.0.0.1:${port} (via SSH / OrbitOS)
+services:
+  backrest:
+    image: garethgeorge/backrest:latest
+    container_name: backrest
+    hostname: ${sid.replace(/[^a-zA-Z0-9-]/g, '-')}-backrest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${port}:9898"
+    environment:
+      BACKREST_PORT: "0.0.0.0:9898"
+      BACKREST_DATA: /backrest-data
+      BACKREST_CONFIG: /config/config.json
+      XDG_CACHE_HOME: /cache
+      TMPDIR: /tmp
+      TZ: "${tz}"
+    volumes:
+      - backrest-config:/config
+      - backrest-data:/backrest-data
+      - backrest-cache:/cache
+${MOUNTS.map(([h, c, m]) => `      - ${h}:${c}:${m}`).join('\n')}
+    mem_limit: 1g
+volumes:
+  backrest-config:
+  backrest-data:
+  backrest-cache:
+`;
+  return journal.action(sid, 'backrest.install', `127.0.0.1:${port}`, async () => {
+    const log = [];
+    const code = await stream(
+      sid,
+      `set -e
+mkdir -p ${INSTALL_DIR} /srv/restic
+chmod 700 /srv/restic
+for d in /var/lib/docker/volumes /opt /srv /home /root /etc /var/www /var/backups; do mkdir -p "$d"; done
+cat > ${INSTALL_DIR}/compose.yml <<'ORBIT_EOF'
+${compose}ORBIT_EOF
+cd ${INSTALL_DIR} && ${dp}docker compose -p backrest up -d 2>&1`,
+      { onData: (d) => log.push(d), timeout: 600000 },
+    );
+    if (code !== 0) throw new HttpError(502, `Installation échouée : ${log.join('').slice(-800)}`);
+    cache.delete(sid);
+    // Attend l'API puis donne un identifiant d'instance ; l'accès reste limité à 127.0.0.1.
+    let cfg = null;
+    for (let i = 0; i < 20 && !cfg; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        cfg = await rpc(sid, 'GetConfig', {});
+      } catch {
+        /* démarrage */
+      }
+    }
+    if (!cfg) throw new HttpError(502, 'Backrest a démarré mais son API ne répond pas');
+    if (!cfg.instance) {
+      const next = { ...cfg, instance: `${sid}-backrest`.replace(/[^a-zA-Z0-9_-]/g, '-'), auth: { ...(cfg.auth || {}), disabled: true } };
+      await rpc(sid, 'SetConfig', next);
+    }
+    return { ok: true, dir: INSTALL_DIR, port };
+  });
+}
+
+// ───────── Dépôts restic ─────────
+const REPO_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{1,40}$/;
+const SAFE = /^[^\s'"\\]{1,300}$/;
+
+/** Construit un dépôt Backrest depuis un formulaire simple (B2, S3, local, rest-server). */
+function repoFrom(info, b) {
+  if (!REPO_ID.test(b.id || '')) throw bad('Identifiant de dépôt invalide');
+  const need = (k, label) => {
+    const v = String(b[k] || '').trim();
+    if (!v || !SAFE.test(v)) throw bad(`${label} requis (sans espace ni guillemet)`);
+    return v;
+  };
+  let uri;
+  const env = [];
+  if (b.type === 'b2') {
+    uri = `b2:${need('bucket', 'Bucket')}:${String(b.path || '').replace(/^\/+/, '')}`;
+    env.push(`B2_ACCOUNT_ID=${need('keyId', 'keyID')}`, `B2_ACCOUNT_KEY=${need('secret', 'applicationKey')}`);
+  } else if (b.type === 's3') {
+    const endpoint = need('endpoint', 'Endpoint').replace(/\/+$/, '');
+    if (!/^https?:\/\//.test(endpoint)) throw bad('Endpoint S3 : https://…');
+    uri = `s3:${endpoint}/${need('bucket', 'Bucket')}${b.path ? '/' + String(b.path).replace(/^\/+/, '') : ''}`;
+    env.push(`AWS_ACCESS_KEY_ID=${need('keyId', 'Access key')}`, `AWS_SECRET_ACCESS_KEY=${need('secret', 'Secret key')}`);
+    if (b.region) env.push(`AWS_DEFAULT_REGION=${need('region', 'Région')}`);
+  } else if (b.type === 'local') {
+    const host = need('path', 'Dossier');
+    if (!host.startsWith('/')) throw bad('Chemin absolu requis');
+    const c = toContainer(info, host);
+    const m = c && info.mounts.find((x) => x.rw && (c === x.dest || c.startsWith(x.dest + '/')));
+    if (!m || m.dest === '/data/tmp') throw bad('Ce dossier n’est pas inscriptible par Backrest (installé par OrbitOS : /srv/restic/<nom>)');
+    uri = c;
+  } else if (b.type === 'rest') {
+    const url = need('url', 'URL');
+    if (!/^https?:\/\//.test(url)) throw bad('URL rest-server : https://…');
+    uri = `rest:${url}`;
+  } else throw bad('Type de dépôt inconnu');
+  const password = b.password ? String(b.password) : crypto.randomBytes(24).toString('base64url');
+  if (password.length < 12) throw bad('Mot de passe restic : 12 caractères minimum');
+  return {
+    repo: {
+      id: b.id,
+      uri,
+      password,
+      env,
+      prunePolicy: { schedule: { cron: '0 3 1 * *', clock: 'CLOCK_LOCAL' }, maxUnusedPercent: 10 },
+      checkPolicy: { schedule: { cron: '0 3 15 * *', clock: 'CLOCK_LOCAL' }, structureOnly: true },
+    },
+    password,
+    generated: !b.password,
+  };
+}
+
+export async function addRepo(sid, body) {
+  const info = await need(sid);
+  const { repo, password, generated } = repoFrom(info, body || {});
+  const cfg = await rpc(sid, 'GetConfig', {});
+  if ((cfg.repos || []).some((r) => r.id === repo.id)) throw bad(`Un dépôt « ${repo.id} » existe déjà`);
+  await backupConfig(sid, info);
+  return journal.action(sid, 'backrest.repo.add', `${repo.id} (${repo.uri.split(':')[0]})`, async () => {
+    // AddRepo initialise le dépôt (restic init) s'il n'existe pas encore.
+    await rpc(sid, 'AddRepo', { repo }, { timeout: 180000 });
+    // Le mot de passe n'est renvoyé qu'une fois : sans lui, les sauvegardes sont illisibles.
+    return { ok: true, id: repo.id, uri: maskUri(repo.uri), password: generated ? password : null };
+  });
 }

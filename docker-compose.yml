@@ -1,7 +1,7 @@
-# OrbitOS — un seul conteneur : nginx (vhost orbitos.mana) + serveur Node.
+# OrbitOS — un seul conteneur : nginx + serveur Node. Démarrage :
+#   cp .env.example .env   (choisis ORBIT_PASSWORD)
 #   docker compose up -d --build
-# Prérequis une fois sur le Mac :
-#   echo "127.0.0.1 orbitos.mana" | sudo tee -a /etc/hosts
+#   → http://localhost:8080
 services:
   orbitos:
     build: .
@@ -9,16 +9,19 @@ services:
     container_name: orbitos
     restart: unless-stopped
     ports:
-      # Lié à 127.0.0.1 : OrbitOS n'est jamais exposé au réseau local.
-      - "127.0.0.1:${ORBIT_HTTP_PORT:-80}:80"
+      # Lié à 127.0.0.1 : OrbitOS n'est pas exposé au réseau. Pour un accès distant, mets un
+      # reverse proxy TLS + SSO/VPN devant (voir README), jamais le port brut.
+      - "127.0.0.1:${ORBIT_HTTP_PORT:-8080}:80"
     environment:
       ORBIT_PASSWORD: ${ORBIT_PASSWORD:?Définis ORBIT_PASSWORD dans .env}
-      ORBIT_HOSTS: orbitos.mana,localhost,127.0.0.1
+      ORBIT_HOSTS: ${ORBIT_HOSTS:-localhost,127.0.0.1}
       ORBIT_READONLY: ${ORBIT_READONLY:-0}
+      TZ: ${TZ:-Etc/UTC}
     volumes:
-      # Clés et config SSH, en lecture seule (jamais copiées dans l'image)
-      - ${HOME}/.ssh:/ssh:ro
-      # Serveurs ajoutés, journal, clés d'hôte mémorisées, secret de session
+      # Clés et config SSH en lecture seule (jamais copiées dans l'image). Sur un serveur, pointe
+      # vers un dossier dédié contenant config, known_hosts et la clé d'OrbitOS.
+      - ${ORBIT_SSH_DIR:-${HOME}/.ssh}:/ssh:ro
+      # Serveurs ajoutés, réglages, journal, secrets (tokens, mot de passe), clés d'hôte mémorisées
       - orbitos-data:/data
 
 volumes:

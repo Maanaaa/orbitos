@@ -15,9 +15,10 @@ import {
   Info,
   Rocket,
   DatabaseBackup,
+  SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react';
-import type { Win } from '../os/store';
+import { useOS, type Win, type Settings } from '../os/store';
 
 export type AppProps = { win: Win };
 export type AppDef = {
@@ -184,6 +185,17 @@ export const APPS: AppDef[] = [
     component: lazy(() => import('./Editor')),
   },
   {
+    id: 'settings',
+    name: 'Réglages',
+    icon: SlidersHorizontal,
+    gradient: 'linear-gradient(160deg,#d1d5db,#6b7280 75%)',
+    size: { w: 900, h: 620 },
+    singleton: true,
+    dock: true,
+    description: 'Modules, intégrations, sauvegarde, sécurité',
+    component: lazy(() => import('./Settings')),
+  },
+  {
     id: 'about',
     name: 'À propos',
     icon: Info,
@@ -196,6 +208,18 @@ export const APPS: AppDef[] = [
 ];
 
 export const appById = (id: string) => APPS.find((a) => a.id === id);
+
+/** Module dont dépend une app (l'Éditeur suit le Finder) ; les apps sans module sont toujours là. */
+const MODULE_OF: Record<string, string> = { editor: 'finder' };
+export function appEnabled(id: string, settings: Settings | null) {
+  const m = MODULE_OF[id] || id;
+  return !settings || settings.modules[m] !== false;
+}
+/** Apps visibles selon les modules activés dans les Réglages. */
+export function useEnabledApps() {
+  const settings = useOS((s) => s.settings);
+  return APPS.filter((a) => appEnabled(a.id, settings));
+}
 
 export function AppIcon({ app, size = 50 }: { app: AppDef; size?: number }) {
   const Icon = app.icon;

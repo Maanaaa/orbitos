@@ -9,6 +9,7 @@ import websocket from '@fastify/websocket';
 import fstatic from '@fastify/static';
 
 import * as ssh from './ssh.js';
+import * as settings from './settings.js';
 import * as journal from './journal.js';
 import * as system from './modules/system.js';
 import * as docker from './modules/docker.js';
@@ -25,7 +26,7 @@ import { HttpError, q, dockerName, unit, absPath, int, bad } from './util.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4000);
-const HOSTS = (process.env.ORBIT_HOSTS || 'orbitos.mana,localhost,127.0.0.1').split(',').map((h) => h.trim().toLowerCase());
+const HOSTS = (process.env.ORBIT_HOSTS || 'localhost,127.0.0.1').split(',').map((h) => h.trim().toLowerCase());
 const READONLY = process.env.ORBIT_READONLY === '1';
 const VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8')).version;
 const COMMIT = (process.env.ORBIT_COMMIT || 'dev').slice(0, 12);
@@ -43,7 +44,7 @@ if (!process.env.ORBIT_PASSWORD && !secret.password) {
   console.log(`\n  🔑 Mot de passe OrbitOS généré : ${secret.password}\n     (définis ORBIT_PASSWORD pour le choisir)\n`);
 }
 fs.writeFileSync(SECRET_FILE, JSON.stringify(secret, null, 2), { mode: 0o600 });
-const PASSWORD = process.env.ORBIT_PASSWORD || secret.password;
+let PASSWORD = process.env.ORBIT_PASSWORD || secret.password;
 
 const sign = (v) => crypto.createHmac('sha256', secret.sessionKey).update(v).digest('base64url');
 const makeToken = () => {
@@ -84,6 +85,8 @@ app.addHook('onRequest', async (req, reply) => {
   const isApi = url.startsWith('/api/') || url.startsWith('/ws/');
   if (!isApi || url === '/api/login' || url === '/api/session') return;
   if (!validToken(req.cookies.orbit_session)) return reply.code(401).send({ error: 'Non authentifié' });
+  const off = settings.blockedModule(url);
+  if (off) return reply.code(403).send({ error: `Le module ${off} est désactivé (Réglages → Modules)` });
   if (url.startsWith('/ws/')) {
     const origin = req.headers.origin;
     if (origin) {
@@ -130,6 +133,32 @@ app.post('/api/login', async (req, reply) => {
 app.get('/api/session', async (req) => ({ authenticated: validToken(req.cookies.orbit_session), readonly: READONLY, version: VERSION, commit: COMMIT }));
 app.post('/api/logout', async (req, reply) => {
   reply.clearCookie('orbit_session', { path: '/' });
+  return { ok: true };
+});
+
+// ───────── Réglages ─────────
+app.get('/api/settings', async () => ({ ...settings.publicSettings(), passwordFromEnv: !!process.env.ORBIT_PASSWORD }));
+app.patch('/api/settings', async (req) => {
+  const s = settings.update(req.body || {});
+  journal.log({ server: '-', kind: 'settings.update', target: Object.keys(req.body || {}).join(', '), ok: true });
+  return { ...settings.publicSettings(), passwordFromEnv: !!process.env.ORBIT_PASSWORD, saved: !!s };
+});
+app.post('/api/settings/password', async (req, reply) => {
+  if (process.env.ORBIT_PASSWORD) throw bad('Le mot de passe est imposé par la variable ORBIT_PASSWORD : change-la puis redémarre le conteneur');
+  const current = Buffer.from(String(req.body?.current || ''));
+  const expected = Buffer.from(PASSWORD);
+  if (current.length !== expected.length || !crypto.timingSafeEqual(current, expected)) {
+    await new Promise((r) => setTimeout(r, 400));
+    throw new HttpError(403, 'Mot de passe actuel incorrect');
+  }
+  const next = String(req.body?.next || '');
+  if (next.length < 12) throw bad('12 caractères minimum');
+  secret.password = next;
+  secret.sessionKey = crypto.randomBytes(32).toString('hex'); // déconnecte toutes les autres sessions
+  fs.writeFileSync(SECRET_FILE, JSON.stringify(secret, null, 2), { mode: 0o600 });
+  PASSWORD = next;
+  reply.setCookie('orbit_session', makeToken(), { httpOnly: true, sameSite: 'strict', path: '/', maxAge: 30 * 86400, secure: req.protocol === 'https' });
+  journal.log({ server: '-', kind: 'settings.password', target: 'mot de passe changé', ok: true });
   return { ok: true };
 });
 
@@ -310,6 +339,8 @@ app.delete('/api/apps/:id/backups/:name', (r) => apps.removeBackup(r.params.id, 
 
 // ───────── Sauvegarde (Backrest / restic) ─────────
 app.get('/api/s/:sid/backrest', (r) => backrest.status(S(r)));
+app.post('/api/s/:sid/backrest/install', (r) => backrest.install(S(r), r.body || {}));
+app.post('/api/s/:sid/backrest/repos', (r) => backrest.addRepo(S(r), r.body || {}));
 app.get('/api/s/:sid/backrest/sources', (r) => backrest.sources(S(r)));
 app.post('/api/s/:sid/backrest/credentials', (r) => backrest.setCredentials(S(r), r.body || {}));
 app.post('/api/s/:sid/backrest/plans', (r) => backrest.createPlan(S(r), r.body || {}));
