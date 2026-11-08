@@ -1,0 +1,114 @@
+#!/bin/sh
+# orbitos-deploy — met à jour OrbitOS sur le serveur à partir d'une archive reçue sur stdin.
+#
+# Pensé pour une clé SSH restreinte (authorized_keys) :
+#   restrict,command="/usr/local/bin/orbitos-deploy" ssh-ed25519 AAAA… github-actions-orbitos
+# La CI envoie `git archive` en tar.gz sur stdin ; la commande demandée (SSH_ORIGINAL_COMMAND)
+# peut contenir « deploy <sha> » pour tracer la version.
+#
+# Étapes : validation de l'archive → build d'une image candidate (la prod n'est pas touchée si le
+# build échoue) → sauvegarde des sources → synchronisation → recréation du conteneur → contrôle de
+# santé → retour automatique à l'image précédente en cas d'échec.
+#
+# Configuration : /etc/orbitos-deploy.conf (shell), exemple :
+#   SRC_DIR=/opt/orbitos
+#   PROJECT=orbitos
+#   COMPOSE_FILE=/opt/orbitos/compose.yml
+#   ENV_FILE=/opt/orbitos/.env
+#   HEALTH_URL=http://127.0.0.1:8080/api/session
+#   HEALTH_HOST=orbitos.example.com
+set -eu
+
+CONF=${ORBITOS_DEPLOY_CONF:-/etc/orbitos-deploy.conf}
+# shellcheck disable=SC1090
+[ -f "$CONF" ] && . "$CONF"
+SRC_DIR=${SRC_DIR:-/opt/orbitos}
+IMAGE=${IMAGE:-orbitos:latest}
+PROJECT=${PROJECT:-orbitos}
+COMPOSE_FILE=${COMPOSE_FILE:-$SRC_DIR/compose.yml}
+ENV_FILE=${ENV_FILE:-}
+HEALTH_URL=${HEALTH_URL:-http://127.0.0.1/api/session}
+HEALTH_HOST=${HEALTH_HOST:-}
+BACKUP_DIR=${BACKUP_DIR:-/var/backups/orbitos-src}
+KEEP=${KEEP:-10}
+MAX_BYTES=${MAX_BYTES:-52428800}
+
+log() { printf '▸ %s\n' "$*"; }
+die() { printf '✖ %s\n' "$*" >&2; exit 1; }
+
+# Version demandée (facultative) : « deploy <sha> »
+SHA=""
+case "${SSH_ORIGINAL_COMMAND:-}" in
+  "deploy "*) SHA=${SSH_ORIGINAL_COMMAND#deploy } ;;
+  "" | deploy) ;;
+  *) die "Commande refusée : seul « deploy [sha] » est accepté" ;;
+esac
+printf '%s' "$SHA" | grep -Eq '^[0-9a-f]{0,40}$' || die "SHA invalide"
+
+exec 9>/run/orbitos-deploy.lock
+flock -n 9 || die "Un déploiement est déjà en cours"
+
+TMP=$(mktemp -d /tmp/orbitos-deploy.XXXXXX)
+trap 'rm -rf "$TMP"' EXIT
+mkdir "$TMP/src"
+
+log "Réception de l'archive${SHA:+ ($SHA)}"
+head -c "$MAX_BYTES" | tar -xzf - -C "$TMP/src" --no-same-owner --no-same-permissions
+for f in package.json package-lock.json Dockerfile server/index.js web/package.json; do
+  [ -f "$TMP/src/$f" ] || die "Archive invalide : $f manquant"
+done
+find "$TMP/src" -type l -lname '/*' | grep -q . && die "Archive invalide : lien symbolique absolu"
+[ -n "$SHA" ] && printf '%s\n' "$SHA" > "$TMP/src/.version"
+
+log "Build de l'image candidate"
+docker build --pull -q -t orbitos:candidate --build-arg "ORBIT_COMMIT=${SHA:-local}" "$TMP/src" >/dev/null || die "Build échoué : la production n'a pas été modifiée"
+
+log "Sauvegarde des sources actuelles"
+mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
+if [ -d "$SRC_DIR" ]; then
+  tar -czf "$BACKUP_DIR/orbitos-src-$(date +%Y%m%d-%H%M%S).tar.gz" -C "$SRC_DIR" --exclude=./ssh --exclude=./data --exclude=./.env .
+  ls -1t "$BACKUP_DIR"/orbitos-src-*.tar.gz 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f
+fi
+
+log "Synchronisation de $SRC_DIR"
+mkdir -p "$SRC_DIR"
+# Les secrets et la config propres au serveur ne sont jamais écrasés ni supprimés.
+rsync -a --delete --exclude=/ssh --exclude=/data --exclude=/.env --exclude=/compose.yml --exclude=/local "$TMP/src/" "$SRC_DIR/"
+chown -R root:root "$SRC_DIR"
+
+compose() {
+  if [ -n "$ENV_FILE" ]; then docker compose -p "$PROJECT" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
+  else docker compose -p "$PROJECT" -f "$COMPOSE_FILE" "$@"; fi
+}
+
+healthy() {
+  i=0
+  while [ $i -lt 30 ]; do
+    if [ -n "$HEALTH_HOST" ]; then curl -fsS -m 3 -o /dev/null -H "Host: $HEALTH_HOST" "$HEALTH_URL" && return 0
+    else curl -fsS -m 3 -o /dev/null "$HEALTH_URL" && return 0; fi
+    i=$((i + 1)); sleep 2
+  done
+  return 1
+}
+
+log "Remplacement du conteneur"
+docker image inspect "$IMAGE" >/dev/null 2>&1 && docker tag "$IMAGE" orbitos:previous
+docker tag orbitos:candidate "$IMAGE"
+compose up -d --force-recreate --no-build 2>&1 | tail -n 3
+
+log "Contrôle de santé ($HEALTH_URL)"
+if healthy; then
+  docker rmi orbitos:candidate >/dev/null 2>&1 || true
+  docker image prune -f --filter "label=org.opencontainers.image.title=OrbitOS" >/dev/null 2>&1 || true
+  log "✓ OrbitOS ${SHA:+$SHA }en ligne"
+  exit 0
+fi
+
+printf '✖ OrbitOS ne répond pas : retour à l’image précédente\n' >&2
+docker logs --tail 30 "$(compose ps -q | head -1)" 2>&1 | sed 's/^/  │ /' >&2 || true
+if docker image inspect orbitos:previous >/dev/null 2>&1; then
+  docker tag orbitos:previous "$IMAGE"
+  compose up -d --force-recreate --no-build >/dev/null 2>&1
+  healthy && printf '↩ Image précédente rétablie\n' >&2
+fi
+exit 1

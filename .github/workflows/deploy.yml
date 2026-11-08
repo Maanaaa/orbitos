@@ -1,0 +1,69 @@
+name: CI & déploiement
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Vérifications
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - name: Serveur — dépendances et syntaxe
+        run: |
+          npm ci --no-audit --no-fund
+          for f in $(git ls-files 'server/*.js'); do node --check "$f"; done
+      - name: Interface — types et build
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit -p .
+          npm run build
+      - name: Script de déploiement
+        run: sh -n deploy/orbitos-deploy
+
+  # Déploiement continu : actif uniquement si la variable DEPLOY_HOST est définie sur le dépôt
+  # (Settings → Secrets and variables → Actions). Les forks n'ont ni la variable ni les secrets.
+  deploy:
+    name: Déploiement
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clé SSH de déploiement
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Envoi et mise à jour
+        env:
+          HOST: ${{ vars.DEPLOY_HOST }}
+          USER: ${{ vars.DEPLOY_USER || 'root' }}
+        run: |
+          # La clé est restreinte côté serveur (command="…/orbitos-deploy") : elle ne peut que déployer.
+          git archive --format=tar.gz HEAD | ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "deploy $GITHUB_SHA"
+      - name: Nettoyage
+        if: always()
+        run: rm -f ~/.ssh/deploy

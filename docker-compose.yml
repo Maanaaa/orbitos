@@ -1,0 +1,25 @@
+# OrbitOS — un seul conteneur : nginx (vhost orbitos.mana) + serveur Node.
+#   docker compose up -d --build
+# Prérequis une fois sur le Mac :
+#   echo "127.0.0.1 orbitos.mana" | sudo tee -a /etc/hosts
+services:
+  orbitos:
+    build: .
+    image: orbitos:latest
+    container_name: orbitos
+    restart: unless-stopped
+    ports:
+      # Lié à 127.0.0.1 : OrbitOS n'est jamais exposé au réseau local.
+      - "127.0.0.1:${ORBIT_HTTP_PORT:-80}:80"
+    environment:
+      ORBIT_PASSWORD: ${ORBIT_PASSWORD:?Définis ORBIT_PASSWORD dans .env}
+      ORBIT_HOSTS: orbitos.mana,localhost,127.0.0.1
+      ORBIT_READONLY: ${ORBIT_READONLY:-0}
+    volumes:
+      # Clés et config SSH, en lecture seule (jamais copiées dans l'image)
+      - ${HOME}/.ssh:/ssh:ro
+      # Serveurs ajoutés, journal, clés d'hôte mémorisées, secret de session
+      - orbitos-data:/data
+
+volumes:
+  orbitos-data:
